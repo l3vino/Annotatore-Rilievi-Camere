@@ -1,0 +1,3107 @@
+<!DOCTYPE html>
+<html lang="it" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Annotatore rilievi camere</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <style>
+    :root{
+      --ink:#10161f; --ink-2:#55637a; --ink-3:#8794a8;
+      --paper:#ffffff; --paper-2:#f7f8fa; --paper-3:#eef1f5;
+      --rule:#e4e8ee; --rule-2:#d3dae3;
+      --field:#ffffff; --canvas:#b9c4d1;
+      --brand:#1f5fd0; --brand-ink:#ffffff; --brand-soft:#eaf1fd; --brand-line:#c3d7f8;
+      --go:#0a8f4d; --go-2:#087a41; --go-soft:#e6f6ed;
+      --stop:#c8102e; --amber:#a86a00; --amber-soft:#fdf3e1;
+      --pdf:#c8102e; --folder:#e0a01c; --info:#0a58ff;
+      --chip:#1b2331; --chip-fg:#ffffff;
+      --map-halo:#ffffff; --map-ring:#0a58ff; --map-point:#c8102e; --map-line:#0a58ff;
+      --sh-1:0 1px 2px rgba(16,22,31,.06);
+      --sh-2:0 4px 14px rgba(16,22,31,.10);
+      --sh-3:0 14px 38px -10px rgba(16,22,31,.28);
+      --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px;
+      --rad:7px; --rad-lg:11px;
+      --ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+      --num:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+      --head:48px; --bar:40px;
+      --ease:cubic-bezier(.22,.75,.28,1);
+    }
+    [data-theme="dark"]{
+      --ink:#e9eef6; --ink-2:#a3b0c4; --ink-3:#74829a;
+      --paper:#151b25; --paper-2:#1b222e; --paper-3:#222b39;
+      --rule:#28313f; --rule-2:#36415280;
+      --field:#111721; --canvas:#070a10;
+      --brand:#5f9bff; --brand-ink:#08101d; --brand-soft:#17243a; --brand-line:#2c4368;
+      --go:#25b36a; --go-2:#1c9a59; --go-soft:#10281c;
+      --stop:#ff5468; --amber:#e0a13f; --amber-soft:#2b2213;
+      --pdf:#ff6b7d; --folder:#f0be4e; --info:#5f9bff;
+      --chip:#dfe7f2; --chip-fg:#0d1219;
+      --map-halo:#04121c; --map-ring:#3ddcff; --map-point:#ff5468; --map-line:#7fb0ff;
+      --sh-1:0 1px 2px rgba(0,0,0,.5); --sh-2:0 4px 14px rgba(0,0,0,.55); --sh-3:0 14px 38px -10px rgba(0,0,0,.7);
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100%}
+    body{font-family:var(--ui);background:var(--paper-2);color:var(--ink);display:flex;flex-direction:column;overflow:hidden;
+         -webkit-font-smoothing:antialiased;font-size:13.5px;line-height:1.45}
+    :focus-visible{outline:2px solid var(--brand);outline-offset:2px;border-radius:3px}
+    button,input,textarea{font:inherit;color:inherit}
+    /* barre di scorrimento coerenti col tema */
+    :root{color-scheme:light}
+    [data-theme="dark"]{color-scheme:dark}
+    *{scrollbar-width:thin;scrollbar-color:var(--rule-2) transparent}
+    ::-webkit-scrollbar{width:11px;height:11px}
+    ::-webkit-scrollbar-track{background:transparent}
+    ::-webkit-scrollbar-thumb{background-color:var(--rule-2);border-radius:8px;border:3px solid transparent;background-clip:content-box}
+    ::-webkit-scrollbar-thumb:hover{background-color:var(--ink-3)}
+    ::-webkit-scrollbar-corner{background:transparent}
+
+    .cap{font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-2)}
+    .num{font-variant-numeric:tabular-nums}
+
+    /* ---- top bar ---- */
+    header{height:var(--head);background:var(--paper);border-bottom:1px solid var(--rule);display:flex;align-items:center;
+           justify-content:space-between;gap:var(--s3);padding:0 var(--s3);flex-shrink:0;position:relative;z-index:60}
+    .wordmark{font-size:14px;font-weight:650;letter-spacing:-.012em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .wordmark span{color:var(--ink-3);font-weight:500}
+    .hgroup{display:flex;align-items:center;gap:var(--s2);flex-shrink:0}
+
+    /* theme switch */
+    .theme{display:flex;align-items:center;gap:6px;color:var(--ink-3);padding:0 2px}
+    .theme svg{width:14px;height:14px;flex-shrink:0;transition:color .25s var(--ease)}
+    .theme .lit{color:var(--amber)}
+    .tsw{position:relative;width:34px;height:19px;border-radius:20px;background:var(--paper-3);border:1px solid var(--rule-2);
+         cursor:pointer;padding:0;transition:background .25s var(--ease)}
+    .tsw::after{content:'';position:absolute;top:2px;left:2px;width:13px;height:13px;border-radius:50%;background:var(--paper);
+                box-shadow:var(--sh-1);transition:transform .3s var(--ease)}
+    [data-theme="dark"] .tsw::after{transform:translateX(15px)}
+    [data-theme="dark"] .tsw{background:var(--brand-soft)}
+
+    .sigla{font-size:11px;font-weight:650;letter-spacing:.01em;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:var(--paper-3);border:1px solid var(--rule);
+           color:var(--ink-2);padding:4px 9px;border-radius:20px;cursor:pointer;transition:all .18s var(--ease)}
+    .sigla:hover{border-color:var(--rule-2);color:var(--ink)}
+
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;height:28px;padding:0 11px;font-size:12.5px;
+         font-weight:550;border-radius:var(--rad);border:1px solid var(--rule);background:var(--paper);color:var(--ink);
+         cursor:pointer;white-space:nowrap;transition:background .16s var(--ease),border-color .16s var(--ease),transform .12s var(--ease),box-shadow .16s var(--ease)}
+    .btn:hover{background:var(--paper-2);border-color:var(--rule-2)}
+    .btn:active{transform:translateY(.5px)}
+    .btn.pri{background:var(--brand);border-color:transparent;color:var(--brand-ink);font-weight:600}
+    .btn.pri:hover{background:var(--brand);filter:brightness(1.07)}
+    .btn.go{background:var(--go);border-color:transparent;color:#fff;font-weight:600;height:30px;padding:0 15px;box-shadow:0 1px 0 rgba(0,0,0,.06),0 3px 10px -3px rgba(10,143,77,.55)}
+    .btn.go:hover{background:var(--go-2)}
+    .btn.go.done{background:var(--go-2);animation:okPulse .7s var(--ease)}
+    @keyframes okPulse{0%{transform:scale(1)}35%{transform:scale(1.07)}100%{transform:scale(1)}}
+    .spin{width:12px;height:12px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;
+          animation:spin .7s linear infinite;flex-shrink:0;display:inline-block}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .btn.busy{pointer-events:none;opacity:.85}
+    .btn.on{background:var(--brand-soft);border-color:var(--brand-line);color:var(--brand)}
+    .btn.ico{width:28px;padding:0}
+    .btn svg{width:14px;height:14px;display:block;pointer-events:none;flex-shrink:0}
+    .btn:disabled{opacity:.4;cursor:not-allowed;pointer-events:none;box-shadow:none}
+    .drawer{display:none}
+
+    .ws{display:flex;flex:1;min-height:0;overflow:hidden;position:relative}
+
+    /* ---- files ---- */
+    .files{width:262px;min-width:190px;max-width:520px;background:var(--paper);border-right:1px solid var(--rule);
+           display:flex;flex-direction:column;flex-shrink:0;position:relative;z-index:20}
+    .ph{height:var(--bar);padding:0 var(--s3);border-bottom:1px solid var(--rule);display:flex;align-items:center;
+        justify-content:space-between;gap:var(--s2);flex-shrink:0}
+    .ph .note{font-size:11px;color:var(--ink-2);max-width:118px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .search{padding:var(--s2);border-bottom:1px solid var(--rule);flex-shrink:0}
+    .tree{flex:1;overflow:auto;padding:var(--s1) 0}
+    .row{display:flex;align-items:center;gap:6px;height:27px;padding-right:var(--s2);cursor:pointer;font-size:12.5px;
+         user-select:none;white-space:nowrap;color:var(--ink-2);position:relative;
+         transition:background .18s cubic-bezier(.22,.8,.28,1),color .18s cubic-bezier(.22,.8,.28,1)}
+    .row:hover{background:var(--paper-2);color:var(--ink)}
+    .row .nm{transition:transform .16s var(--ease)}
+    .row:hover .nm{transform:translateX(2px)}
+    .row.act{background:var(--brand-soft);color:var(--brand);font-weight:600}
+    .row.act::before{content:'';position:absolute;left:0;top:3px;bottom:3px;width:2px;border-radius:0 2px 2px 0;background:var(--brand);
+                     animation:barIn .28s var(--ease)}
+    @keyframes barIn{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+    .row.saved{background:var(--go-soft);color:var(--go);font-weight:600;animation:savedFlash .9s cubic-bezier(.22,.8,.28,1)}
+    .row.saved::before{content:'';position:absolute;left:0;top:3px;bottom:3px;width:2px;border-radius:0 2px 2px 0;background:var(--go)}
+    @keyframes savedFlash{0%{background:transparent;transform:none}22%{background:var(--go-soft);transform:translateX(3px)}
+                          55%{transform:none}100%{background:var(--go-soft);transform:none}}
+    .row.saved .tick{animation:tickIn .38s cubic-bezier(.22,1.2,.36,1) .08s backwards}
+    @keyframes tickIn{0%{transform:scale(0) rotate(-30deg);opacity:0}70%{transform:scale(1.25) rotate(0)}100%{transform:scale(1);opacity:1}}
+    .row.coming{background:var(--brand-soft);color:var(--brand);font-weight:600;animation:coming .55s cubic-bezier(.22,.8,.28,1)}
+    .row.coming::before{content:'';position:absolute;left:0;top:3px;bottom:3px;width:2px;border-radius:0 2px 2px 0;
+                        background:var(--brand);animation:barIn .5s var(--ease)}
+    @keyframes coming{0%{background:transparent;transform:translateX(-7px);opacity:.4}
+                      100%{background:var(--brand-soft);transform:none;opacity:1}}
+    .cv{width:14px;display:inline-flex;align-items:center;justify-content:center;color:var(--ink-3);transition:transform .2s var(--ease);flex-shrink:0}
+    .cv svg{width:9px;height:9px}
+    .cv.op{transform:rotate(90deg)}
+    .ic{display:inline-flex;flex-shrink:0}
+    .ic svg{width:15px;height:15px;display:block}
+    .ic.pdf{color:var(--pdf)}
+    .ic.dir{color:var(--folder)}
+    .nm{overflow:hidden;text-overflow:ellipsis}
+    .tick{margin-left:auto;color:var(--go);display:inline-flex;padding-left:6px}
+    .tick svg{width:12px;height:12px}
+    .none{padding:var(--s5) var(--s4);text-align:center;color:var(--ink-3);font-size:12.5px}
+    .grip{width:5px;cursor:col-resize;position:absolute;top:0;right:-2px;bottom:0;z-index:25;transition:background .16s var(--ease)}
+    .grip:hover,.grip.rz{background:var(--brand)}
+
+    /* ---- viewer ---- */
+    .main{flex:1;display:flex;flex-direction:column;background:var(--canvas);overflow:hidden;position:relative;min-width:0}
+    .bar{height:var(--bar);background:var(--paper);border-bottom:1px solid var(--rule);display:flex;align-items:center;position:relative;
+         justify-content:space-between;padding:0 var(--s2);gap:var(--s2);flex-shrink:0;z-index:40}
+    .crumbs{display:flex;align-items:center;gap:2px;min-width:0;flex:1;font-size:12px;color:var(--ink-2);overflow:hidden}
+    .cr{padding:2px 5px;border-radius:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px;
+        background:none;border:none;color:inherit;cursor:default;font-size:12px;transition:color .16s var(--ease),background .16s var(--ease)}
+    .cr.lk{cursor:pointer}.cr.lk:hover{background:var(--paper-3);color:var(--ink)}
+    .cr.cur{color:var(--ink);font-weight:600}
+    .crs{color:var(--rule-2);flex-shrink:0}
+    .udot{width:6px;height:6px;border-radius:50%;background:var(--amber);flex-shrink:0;margin-left:4px;opacity:0;transform:scale(.4);
+          transition:opacity .2s var(--ease),transform .2s var(--ease)}
+    .crumbs.dirty .udot{opacity:1;transform:none}
+    .savewrap{display:flex;align-items:center;gap:var(--s2);flex-shrink:0}
+    /* Il pulsante Salva non deve mai finire tagliato o sotto un altro pannello:
+       sotto una certa larghezza le etichette si ritirano e restano le icone. */
+    #saveBtn{flex-shrink:0}
+    @media (max-width:1340px){ .savewrap .lbl,#addBtn .lbl{display:none} }
+    @media (max-width:1120px){ .crumbs{max-width:220px} }
+    .mini{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--ink-2);cursor:pointer;user-select:none}
+    .sw{position:relative;width:30px;height:17px;border-radius:20px;background:var(--rule-2);flex-shrink:0;transition:background .22s var(--ease)}
+    .sw::after{content:'';position:absolute;width:13px;height:13px;border-radius:50%;background:#fff;top:2px;left:2px;
+               transition:transform .24s var(--ease);box-shadow:var(--sh-1)}
+    input:checked + .sw{background:var(--go)}
+    input:checked + .sw::after{transform:translateX(13px)}
+    .vh{position:absolute;opacity:0;width:0;height:0;pointer-events:none}
+
+.statusbar{display:flex;align-items:center;gap:9px;padding:7px 12px;font-size:12.5px;flex-shrink:0;
+                border-bottom:1px solid var(--rule);background:var(--paper-2);color:var(--ink);
+                animation:sbIn .3s var(--ease)}
+    @keyframes sbIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+    .statusbar[hidden]{display:none}
+    .statusbar .sb-ico{width:15px;height:15px;flex-shrink:0}
+    .statusbar .sb-text{flex:1;min-width:0;line-height:1.45}
+    .statusbar .sb-act{height:24px;padding:0 10px;font-size:11.5px;flex-shrink:0}
+    .statusbar .sb-x{background:none;border:none;color:var(--ink-3);font-size:16px;line-height:1;cursor:pointer;padding:0 2px;flex-shrink:0}
+    .statusbar .sb-x:hover{color:var(--ink)}
+    .statusbar.ok{background:var(--go-soft);border-bottom-color:var(--go)}
+    .statusbar.ok .sb-ico{color:var(--go)}
+    .statusbar.er{background:#fdf1f2;border-bottom-color:var(--stop)}
+    [data-theme="dark"] .statusbar.er{background:#2a1418}
+    .statusbar.er .sb-ico{color:var(--stop)}
+    .statusbar.wr{background:var(--amber-soft);border-bottom-color:var(--amber)}
+    .statusbar.wr .sb-ico{color:var(--amber)}
+    .scroll{flex:1;overflow:auto;padding:var(--s4) var(--s4) var(--s5);display:flex;flex-direction:column;
+            align-items:center;align-items:safe center;gap:var(--s4);position:relative;scroll-behavior:smooth;
+            transition:opacity .2s var(--ease)}
+    /* il riquadro del rilievo accompagna il cambio di file */
+    .scroll.swapping{opacity:0}
+    .scroll.swapped .pg{animation:pageIn .46s cubic-bezier(.22,.8,.28,1) backwards}
+    .scroll.swapped .pg:nth-child(2){animation-delay:.05s}
+    .scroll.swapped .pg:nth-child(3){animation-delay:.1s}
+    @keyframes pageIn{0%{opacity:0;transform:translateY(14px) scale(.988)}100%{opacity:1;transform:none}}
+    .scroll.placing{cursor:crosshair}
+    .pg{position:relative;background:#fff;box-shadow:0 2px 6px rgba(16,22,31,.16),0 12px 28px -14px rgba(16,22,31,.4);
+        flex-shrink:0;contain:layout;transition:box-shadow .2s var(--ease)}
+    .pg canvas{display:block;opacity:0;transition:opacity .32s var(--ease)}
+    .pg canvas.in{opacity:1}
+    .pg.dragsrc{z-index:600;overflow:visible}
+    .sk{position:absolute;inset:0;background:linear-gradient(100deg,var(--paper-3) 34%,var(--rule) 50%,var(--paper-3) 66%);
+        background-size:230% 100%;animation:sk 1.25s linear infinite}
+    @keyframes sk{to{background-position:-230% 0}}
+    .ov{position:absolute;inset:0;pointer-events:none}
+    .blank{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;text-align:center;
+           color:var(--ink-3);gap:var(--s2);margin:auto;animation:fade .4s var(--ease)}
+    @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+    /* floating controls */
+    .deck{position:absolute;right:var(--s4);bottom:var(--s4);z-index:40;display:flex;flex-direction:column;align-items:stretch;gap:0;
+          min-width:40px;background:var(--paper);border:1px solid var(--rule);border-radius:10px;padding:3px;box-shadow:var(--sh-2);
+          animation:deckIn .45s var(--ease)}
+    @keyframes deckIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+    .deck .btn{border:none;background:none;height:25px;width:100%;padding:0;margin:0;color:var(--ink-2);border-radius:6px}
+    .deck .btn:hover{background:var(--paper-3);color:var(--ink)}
+    .deck .btn:active{transform:scale(.9)}
+    .deck:hover{box-shadow:var(--sh-3)}
+    .deck .zbox{display:flex;align-items:center;justify-content:center;gap:0;height:22px;width:100%}
+    .deck .dv{width:100%;height:1px;background:var(--rule);margin:3px 0}
+    .zbox{display:flex;align-items:center;gap:1px;padding:0 2px}
+    .zin{width:26px;height:20px;border:1px solid transparent;border-radius:5px;background:none;text-align:right;
+         font-size:11.5px;font-variant-numeric:tabular-nums;padding:0 2px;transition:border-color .16s var(--ease),background .16s var(--ease)}
+    .zin:hover{background:var(--paper-3)}
+    .zin:focus{border-color:var(--brand);background:var(--field);outline:none}
+    .zin::selection{background:var(--brand);color:#fff}
+    .zin{cursor:text}
+    .zpc{font-size:10px;color:var(--ink-3);min-width:20px;text-align:left;padding-left:1px}
+    .pnum{font-size:10px;color:var(--ink-2);text-align:center;padding:2px 0;letter-spacing:-.02em}
+    .hintbar{position:absolute;left:50%;top:var(--s3);transform:translate(-50%,-12px);z-index:41;background:var(--ink);color:var(--paper);
+             font-size:11.5px;font-weight:550;padding:6px 13px;border-radius:20px;opacity:0;pointer-events:none;
+             transition:opacity .24s var(--ease),transform .24s var(--ease);box-shadow:var(--sh-2)}
+    .hintbar.on{opacity:1;transform:translate(-50%,0)}
+
+    /* annotation box */
+    .an{position:absolute;box-sizing:border-box;border:1px solid #000;background:rgba(255,255,255,.01);color:#000;
+        font-family:Helvetica,Arial,"Liberation Sans",sans-serif;line-height:1.25;white-space:pre!important;
+        width:max-content!important;height:max-content!important;transform-origin:0 0;cursor:grab;pointer-events:auto;
+        user-select:none;z-index:50;transition:outline-color .16s var(--ease),background .16s var(--ease)}
+    .an:hover{outline:1px solid rgba(31,95,208,.5)}
+    .an.sel{outline:2px solid var(--brand);outline-offset:1px;background:rgba(31,95,208,.07);z-index:60}
+    .an.settle{animation:settle .34s var(--ease)}
+    @keyframes settle{0%{transform:scale(1.035)}60%{transform:scale(.995)}100%{transform:scale(1)}}
+    .an.new{animation:pop .52s cubic-bezier(.16,1.02,.3,1)}
+    @keyframes pop{0%{transform:scale(.7) translateY(6px);opacity:0;filter:blur(1.5px)}
+                   55%{transform:scale(1.05) translateY(0);opacity:1;filter:blur(0)}
+                   78%{transform:scale(.985)}100%{transform:scale(1);opacity:1}}
+    .an.new::after{content:'';position:absolute;inset:-4px;border:2px solid var(--info);border-radius:5px;
+                   animation:bloom .62s var(--ease) forwards;pointer-events:none}
+    @keyframes bloom{0%{transform:scale(.85);opacity:.9}100%{transform:scale(1.25);opacity:0}}
+    .an.gone::after{content:'';position:absolute;inset:-2px;border:2px solid var(--stop);border-radius:4px;
+                    animation:burst .42s var(--ease) forwards;pointer-events:none}
+    @keyframes burst{0%{transform:scale(1);opacity:.85}100%{transform:scale(1.5);opacity:0}}
+    .an.gone{animation:vanish .42s cubic-bezier(.4,0,.7,.2) forwards;pointer-events:none}
+    @keyframes vanish{0%{transform:scale(1) rotate(0);opacity:1;filter:blur(0)}
+                      35%{transform:scale(1.04) rotate(-.6deg);opacity:.9}
+                      100%{transform:scale(.72) rotate(2.5deg);opacity:0;filter:blur(2px)}}
+    .an.drag{cursor:grabbing;opacity:.94;box-shadow:0 10px 26px rgba(16,22,31,.4);z-index:999;transition:none}
+    .an.edit{cursor:text;user-select:text;outline:2px solid var(--brand);background:#fff;z-index:70}
+    .tools{position:absolute;left:0;bottom:calc(100% + 5px);display:flex;gap:3px;font-family:var(--ui);white-space:nowrap;
+           opacity:0;transform:translateY(3px);pointer-events:none;transition:opacity .18s var(--ease),transform .18s var(--ease)}
+    .an.sel .tools{opacity:1;transform:none;pointer-events:auto}
+    .an.sel .tools .tl{animation:pillIn .3s var(--ease) backwards}
+    .an.sel .tools .tl:nth-child(2){animation-delay:.05s}
+    .an.sel .tools .tl:nth-child(3){animation-delay:.1s}
+    @keyframes pillIn{0%{opacity:0;transform:translateY(5px) scale(.9)}100%{opacity:1;transform:none}}
+    .an.drag .tools,.an.edit .tools{opacity:0;pointer-events:none}
+    .tl{border:none;border-radius:5px;padding:3px 7px;font-size:10px;font-weight:600;line-height:1.2;cursor:pointer;
+        color:var(--chip-fg);background:var(--chip);font-family:inherit;box-shadow:var(--sh-1);
+        transition:background .15s var(--ease),color .15s var(--ease)}
+    .tl.dup{background:var(--info);color:#fff}
+    .tl.dup:hover{filter:brightness(1.12)}
+    .tl.rm{background:var(--stop);color:#fff}
+    .tl.rm:hover{filter:brightness(1.12)}
+    .tl.flag{background:var(--amber);color:#fff;cursor:default}
+
+    /* ---- inspector ---- */
+    .insp{width:456px;min-width:390px;background:var(--paper);border-left:1px solid var(--rule);display:flex;flex-direction:column;
+          flex-shrink:0;z-index:20;position:relative}
+    .ib{flex:1;min-height:0;padding:var(--s3);display:flex;flex-direction:column;gap:var(--s2);overflow-y:auto;
+        transition:opacity .2s var(--ease)}
+    .lock .ib{pointer-events:none;opacity:.2}
+    .veil{position:absolute;inset:var(--bar) 0 0 0;display:none;flex-direction:column;align-items:center;justify-content:center;
+          gap:6px;text-align:center;padding:var(--s5);background:var(--paper);z-index:5;animation:fade .3s var(--ease)}
+    .lock .veil{display:flex}
+    .veil .h{font-size:13px;font-weight:600;color:var(--ink)}
+    .veil .p{font-size:12.5px;color:var(--ink-2);max-width:250px;line-height:1.55}
+
+    .box{border:1px solid var(--rule);border-radius:var(--rad-lg);background:var(--paper);overflow:hidden;transition:border-color .2s var(--ease)}
+    .fresh > .box,.fresh > *{animation:boxIn .42s var(--ease) backwards}
+    .fresh > .box:nth-child(2){animation-delay:.05s}
+    .fresh > .box:nth-child(3){animation-delay:.1s}
+    .fresh > .box:nth-child(4){animation-delay:.15s}
+    @keyframes boxIn{0%{opacity:0;transform:translateY(7px)}100%{opacity:1;transform:none}}
+    .box:focus-within{border-color:var(--rule-2)}
+    .box.grow{flex:1;min-height:0;display:flex;flex-direction:column}
+    .bh{display:flex;align-items:center;justify-content:space-between;gap:var(--s2);padding:7px var(--s3);
+        border-bottom:1px solid var(--rule);background:var(--paper-2)}
+    .bh .cap{color:var(--ink)}
+    .bb{padding:var(--s3);display:flex;flex-direction:column;gap:10px}
+    .box.grow .bb{flex:1;min-height:0}
+    .opt{font-size:10px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--ink-3)}
+
+    .duo{display:grid;grid-template-columns:1fr 1fr;gap:var(--s2)}
+    .fld{display:flex;flex-direction:column;gap:3px;min-width:0}
+    .fl{font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-2);display:flex;align-items:center;gap:5px}
+    .in{width:100%;height:30px;padding:0 9px;border:1px solid var(--rule-2);border-radius:var(--rad);font-size:13px;
+        background:var(--field);outline:none;min-width:0;transition:border-color .16s var(--ease),box-shadow .16s var(--ease)}
+    .in::placeholder{color:var(--ink-3)}
+    .in:focus{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+    .in.bad{border-color:var(--stop);box-shadow:0 0 0 3px rgba(200,16,46,.13)}
+    .pre{display:flex}
+    .pre>span{display:flex;align-items:center;padding:0 9px;background:var(--paper-3);border:1px solid var(--rule-2);border-right:none;
+              border-radius:var(--rad) 0 0 var(--rad);font-size:12.5px;font-weight:600;color:var(--ink-2)}
+    .pre .in{border-radius:0 var(--rad) var(--rad) 0}
+    .cgrid{display:grid;grid-template-columns:1fr 14px 1fr;align-items:center;gap:var(--s1)}
+    .slash{text-align:center;color:var(--ink-3)}
+    .hint{font-size:11px;color:var(--ink-3);min-height:0;transition:color .2s var(--ease)}
+    .hint.bad{color:var(--stop);font-weight:550}
+    .src{width:6px;height:6px;border-radius:50%;background:var(--rule-2);flex-shrink:0;transition:background .3s var(--ease),box-shadow .3s var(--ease)}
+    .src.auto{background:var(--go);box-shadow:0 0 0 2.5px var(--go-soft)}
+
+    .stat{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--ink-2);min-height:17px}
+    .led{width:6px;height:6px;border-radius:50%;background:var(--rule-2);flex-shrink:0;transition:background .25s var(--ease)}
+    .led.ok{background:var(--go)}.led.busy{background:var(--brand);animation:blink .9s ease-in-out infinite}.led.err{background:var(--stop)}
+    @keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+    .stat b{color:var(--ink);font-weight:600}
+    .picks{display:flex;gap:4px}
+    .picks:empty{display:none}
+    .pick{flex:1;min-width:0;border:1px solid var(--rule-2);background:var(--field);border-radius:var(--rad);
+          padding:4px 6px;font-size:10.5px;line-height:1.25;cursor:pointer;text-align:left;color:var(--ink-2);
+          transition:border-color .16s var(--ease),background .16s var(--ease),color .16s var(--ease)}
+    .pick:hover{border-color:var(--brand-line);color:var(--ink)}
+    .pick.on{border-color:var(--brand);background:var(--brand-soft);color:var(--brand);font-weight:600}
+    .pick .o{display:block;font-size:9px;letter-spacing:.06em;text-transform:uppercase;opacity:.75}
+    .pick .v{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .mapwrap{position:relative;flex:1;min-height:132px;border-radius:var(--rad);overflow:hidden;border:1px solid var(--rule);background:var(--paper-3)}
+    #map{position:absolute;inset:0}
+    .mfb{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:var(--s3);
+         font-size:11.5px;color:var(--ink-3);background:var(--paper-2);z-index:400;transition:opacity .25s var(--ease)}
+    .leaflet-container{font-family:var(--ui);background:var(--paper-3)}
+    .leaflet-overlay-pane path.ar-ring{animation:arRing 3s ease-in-out infinite}
+    @keyframes arRing{0%,100%{stroke-opacity:1}50%{stroke-opacity:.45}}
+    .leaflet-overlay-pane path.ar-beam{animation:arBeam 1.3s linear infinite}
+    @keyframes arBeam{to{stroke-dashoffset:-18}}
+    .leaflet-overlay-pane path.ar-here{animation:arHere 2.4s ease-in-out infinite}
+    @keyframes arHere{0%,100%{fill-opacity:1}50%{fill-opacity:.6}}
+    .leaflet-overlay-pane path.ar-addr{animation:arAddr 2.4s ease-in-out .4s infinite}
+    @keyframes arAddr{0%,100%{fill-opacity:1}50%{fill-opacity:.6}}
+    .leaflet-tooltip.addr{background:var(--ink);color:var(--paper);border:none;box-shadow:var(--sh-2);font-size:11px;font-weight:600;padding:3px 7px}
+    .leaflet-tooltip.addr::before{border-top-color:var(--ink)}
+
+    .raw{display:flex;flex-direction:column;gap:5px;flex:1;min-height:0}
+    .raw textarea{flex:1;min-height:0;resize:none;padding:10px 11px;line-height:1.4;font-family:Helvetica,Arial,sans-serif;
+                  font-size:12px;white-space:pre;overflow:auto;border:1px solid var(--rule-2);border-radius:var(--rad);
+                  background:var(--field);outline:none;transition:border-color .16s var(--ease),box-shadow .16s var(--ease)}
+    .raw textarea:focus{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+
+    /* tour */
+    .tv{position:fixed;inset:0;z-index:2600;display:none}
+    .tv.op{display:block}
+    .thole{position:fixed;border-radius:9px;box-shadow:0 0 0 9999px rgba(10,16,26,.7);
+           transition:all .55s cubic-bezier(.22,.75,.28,1);pointer-events:none}
+    .tring{position:fixed;border:2px solid var(--brand);border-radius:9px;
+           transition:all .55s cubic-bezier(.22,.75,.28,1);pointer-events:none;opacity:0}
+    .tring::after{content:'';position:absolute;inset:-5px;border:2px solid var(--brand);border-radius:12px;
+                  animation:halo 2.1s ease-out infinite}
+    @keyframes halo{0%{transform:scale(.97);opacity:.5}70%{transform:scale(1.06);opacity:0}100%{opacity:0}}
+    .tpop.wide{width:min(430px,92vw)}
+    .tpop.wide .ttext{max-height:min(52vh,380px);overflow-y:auto}
+    .tpop{position:fixed;width:min(330px,90vw);background:var(--paper);border-radius:var(--rad-lg);box-shadow:var(--sh-3);
+          padding:var(--s4);display:flex;flex-direction:column;gap:7px;overflow:hidden;
+          animation:popIn .45s cubic-bezier(.16,1.02,.3,1);transition:left .5s var(--ease),top .5s var(--ease),opacity .22s var(--ease),transform .22s var(--ease)}
+    .tpop.out{opacity:0;transform:translateY(9px) scale(.985)}
+    .tpop:not(.out) .ttitle,.tpop:not(.out) .ttext{animation:tslide .42s var(--ease)}
+    @keyframes tslide{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+    .tstep{font-size:10px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--brand)}
+    @keyframes popIn{0%{opacity:0;transform:translateY(14px) scale(.94)}100%{opacity:1;transform:none}}
+    .tbar{position:absolute;left:0;top:0;height:2px;background:var(--brand);transition:width .5s var(--ease)}
+    .tdots i{transition:all .35s var(--ease)}
+    .tdots i.on{width:14px;border-radius:3px}
+    .ttitle{font-size:14.5px;font-weight:650;letter-spacing:-.01em}
+    .ttext{font-size:12.5px;line-height:1.6;color:var(--ink-2)}
+    .tfoot{display:flex;align-items:center;justify-content:space-between;gap:var(--s2);margin-top:var(--s2);
+           padding-top:var(--s3);border-top:1px solid var(--rule)}
+    .tskip{background:none;border:none;font-size:11.5px;color:var(--ink-3);cursor:pointer;text-decoration:underline;padding:2px 0}
+    .tskip:hover{color:var(--ink-2)}
+    .tdots{display:flex;gap:4px;align-items:center}
+    .tdots i{width:5px;height:5px;border-radius:50%;background:var(--rule-2)}
+    .tdots i.on{background:var(--brand)}
+
+    .modal{position:fixed;inset:0;z-index:2000;display:none;background:rgba(10,16,26,.55);backdrop-filter:blur(4px);
+           align-items:center;justify-content:center;padding:var(--s4)}
+    .modal.op{display:flex;animation:fade .22s var(--ease)}
+    .card{width:100%;max-width:380px;background:var(--paper);border-radius:var(--rad-lg);box-shadow:var(--sh-3);padding:var(--s5);
+          display:flex;flex-direction:column;gap:var(--s3);animation:cardIn .28s var(--ease)}
+    @keyframes cardIn{from{opacity:0;transform:translateY(8px) scale(.985)}to{opacity:1;transform:none}}
+    .card h3{font-size:15px;font-weight:650}
+    .keys{display:flex;flex-direction:column;gap:1px;margin:-4px 0 0}
+    .keys .grp{font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);
+               margin:12px 0 5px;padding-bottom:4px;border-bottom:1px solid var(--rule)}
+    .keys .k{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);padding:5px 0;font-size:12.5px}
+    .keys .k span{color:var(--ink-2)}
+    .keys .k b{display:flex;gap:3px;flex-shrink:0}
+    kbd{font-family:var(--num);font-size:10.5px;font-weight:600;background:var(--paper-3);border:1px solid var(--rule-2);
+        border-bottom-width:2px;border-radius:5px;padding:2px 6px;color:var(--ink);white-space:nowrap}
+    .card.wide{max-width:440px}
+    .card.wide .body{max-height:min(60vh,430px);overflow-y:auto;margin:0 -4px;padding:0 4px}
+    .card p{font-size:12.5px;color:var(--ink-2);line-height:1.6}
+
+    .onb{position:fixed;inset:0;z-index:2400;display:none;align-items:center;justify-content:center;
+         padding:var(--s4);background:var(--paper-2)}
+    .onb.op{display:flex}
+    .onb-card{width:100%;max-width:430px;text-align:center;display:flex;flex-direction:column;align-items:center;
+              gap:var(--s3);animation:onbIn .5s cubic-bezier(.22,.8,.28,1)}
+    .onb-card[hidden]{display:none}
+    @keyframes onbIn{0%{opacity:0;transform:translateY(12px)}100%{opacity:1;transform:none}}
+    .onb-ico{width:40px;height:40px;color:var(--brand);opacity:.9}
+    .onb-card h2{font-size:20px;font-weight:680;letter-spacing:-.015em}
+    .onb-card p{font-size:14px;line-height:1.65;color:var(--ink-2);max-width:380px}
+    .onb-in{max-width:300px;height:38px;text-align:center;font-size:15px}
+    .onb-btn{height:38px;padding:0 22px;font-size:14px;margin-top:var(--s1)}
+    /* menu impostazioni */
+    .popw{position:relative}
+    .pop{position:absolute;top:calc(100% + 8px);right:0;min-width:256px;background:var(--paper);
+         border:1px solid var(--rule);border-radius:var(--rad-lg);box-shadow:var(--sh-3);padding:6px;z-index:90;
+         opacity:0;visibility:hidden;transform:translateY(-7px) scale(.96);transform-origin:top right;
+         transition:opacity .18s var(--ease),transform .26s cubic-bezier(.16,1.02,.3,1),visibility .26s}
+    .pop.op{opacity:1;visibility:visible;transform:none}
+    .pop-cap{font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);padding:6px 10px 5px}
+    .pop-sep{height:1px;background:var(--rule);margin:5px 4px}
+    .pop-row{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);
+             padding:5px 10px;font-size:12.5px;color:var(--ink)}
+    .pop-item{display:block;width:100%;text-align:left;background:none;border:none;padding:8px 10px;border-radius:var(--rad);
+              font-size:12.5px;color:var(--ink);cursor:pointer;transition:background .14s var(--ease)}
+    .pop-item:hover{background:var(--paper-3)}
+    .pop-item.row{display:flex;align-items:center;justify-content:space-between;gap:var(--s3)}
+    .pi-v{font-size:11.5px;color:var(--ink-3);max-width:130px;flex-shrink:0;
+          overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:color .14s var(--ease)}
+    .pop-item:hover .pi-v{color:var(--ink-2)}
+    .info-b{width:22px;height:22px;border:none;background:none;color:var(--ink-3);padding:0}
+    .info-b:hover{color:var(--brand);background:none}
+    .info-b svg{width:13px;height:13px}
+    .toasts{position:fixed;bottom:var(--s4);right:var(--s4);display:flex;flex-direction:column;gap:6px;z-index:3000;
+            pointer-events:none;max-width:min(360px,92vw)}
+    .toast{display:flex;gap:8px;align-items:flex-start;background:var(--paper);color:var(--ink);padding:9px 13px;border-radius:var(--rad);
+           font-size:12.5px;box-shadow:var(--sh-2);border:1px solid var(--rule);border-left:3px solid var(--brand);
+           animation:tin .3s var(--ease);pointer-events:auto;transition:opacity .28s var(--ease),transform .28s var(--ease)}
+    .toast i{flex-shrink:0;display:inline-flex;margin-top:1px}
+    .toast i svg{width:13px;height:13px}
+    .toast.ok{border-left-color:var(--go)} .toast.ok i{color:var(--go)}
+    .toast.big{padding:13px 16px;font-size:13px;font-weight:550;border-left-width:4px;box-shadow:var(--sh-3)}
+    .toast.er{border-left-color:var(--stop)} .toast.er i{color:var(--stop)}
+    .toast.wr{border-left-color:var(--amber)} .toast.wr i{color:var(--amber)}
+    @keyframes tin{from{transform:translateX(18px);opacity:0}to{transform:none;opacity:1}}
+
+    @media (max-width:1420px){.insp{width:420px;min-width:376px}}
+    @media (max-width:1240px){.files{width:212px}.insp{width:392px;min-width:360px}.cr{max-width:112px}}
+    @media (max-height:780px){.ib{gap:6px}.mapwrap{min-height:104px}.in{height:28px}}
+    @media (max-width:1000px){
+      .drawer{display:inline-flex}
+      .files{position:absolute;inset:0 auto 0 0;width:264px;transform:translateX(-101%);transition:transform .26s var(--ease);box-shadow:var(--sh-3)}
+      .files.op{transform:none}
+      .insp{position:absolute;inset:0 0 0 auto;width:min(420px,94vw);transform:translateX(101%);transition:transform .26s var(--ease);box-shadow:var(--sh-3)}
+      .insp.op{transform:none}
+      .grip{display:none}
+    }
+    @media (max-width:680px){.deck{right:var(--s2);bottom:var(--s2)}.scroll{padding:var(--s2) var(--s2) 68px}}
+  </style>
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <symbol id="i-pdf" viewBox="0 0 16 16"><path d="M4.1 1.4h4.9l3.9 3.9v8.2a1.1 1.1 0 0 1-1.1 1.1H4.1A1.1 1.1 0 0 1 3 13.5V2.5a1.1 1.1 0 0 1 1.1-1.1Z" fill="currentColor" opacity=".14"/><path d="M4.1 1.4h4.9l3.9 3.9v8.2a1.1 1.1 0 0 1-1.1 1.1H4.1A1.1 1.1 0 0 1 3 13.5V2.5a1.1 1.1 0 0 1 1.1-1.1Z" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/><path d="M9 1.5v3.1a.7.7 0 0 0 .7.7h3.1" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/><rect x="2.2" y="8.1" width="11.6" height="4.4" rx="1" fill="currentColor"/><path d="M4.05 11.7V8.95h.95a.72.72 0 0 1 0 1.44h-.95" fill="none" stroke="var(--paper,#fff)" stroke-width=".92" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.75 11.7V8.95h.7c.75 0 1.1.5 1.1 1.38 0 .87-.35 1.37-1.1 1.37h-.7Z" fill="none" stroke="var(--paper,#fff)" stroke-width=".92" stroke-linejoin="round"/><path d="M10.15 11.7V8.95h1.75M10.15 10.4h1.35" fill="none" stroke="var(--paper,#fff)" stroke-width=".92" stroke-linecap="round"/></symbol>
+    <symbol id="i-dir" viewBox="0 0 16 16"><path d="M1.8 3.6a1 1 0 0 1 1-1h3.1l1.3 1.5h6a1 1 0 0 1 1 1v7.3a1 1 0 0 1-1 1h-10.4a1 1 0 0 1-1-1V3.6Z" fill="currentColor" opacity=".16"/><path d="M1.8 3.6a1 1 0 0 1 1-1h3.1l1.3 1.5h6a1 1 0 0 1 1 1v7.3a1 1 0 0 1-1 1h-10.4a1 1 0 0 1-1-1V3.6Z" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/></symbol>
+    <symbol id="i-dir-open" viewBox="0 0 16 16"><path d="M1.8 3.6a1 1 0 0 1 1-1h3.1l1.3 1.5h6a1 1 0 0 1 1 1v1.4H1.8V3.6Z" fill="currentColor" opacity=".16"/><path d="M1.8 13.4V3.6a1 1 0 0 1 1-1h3.1l1.3 1.5h6a1 1 0 0 1 1 1v1.4M1.8 13.4l1.8-6.3h11.1l-1.8 6.3H1.8Z" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 12 12"><path d="M4.5 2.5 8 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-check" viewBox="0 0 16 16"><path d="M3 8.4l3.2 3.2L13 4.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-warn" viewBox="0 0 16 16"><path d="M8 2.4 14.6 13.6H1.4L8 2.4Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M8 6.4v3M8 11.4v.1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+    <symbol id="i-x" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
+    <symbol id="i-info" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.4" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 7.2v4M8 4.9v.1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 16 16"><circle cx="8" cy="8" r="3.1" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 1.3v1.5M8 13.2v1.5M14.7 8h-1.5M2.8 8H1.3M12.7 3.3l-1 1M4.3 11.7l-1 1M12.7 12.7l-1-1M4.3 4.3l-1-1" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 16 16"><path d="M13.4 9.6A5.9 5.9 0 0 1 6.4 2.6 5.9 5.9 0 1 0 13.4 9.6Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></symbol>
+    <symbol id="i-rot-l" viewBox="0 0 16 16"><path d="M3.2 6.4h3.4V3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.6 6.2a5 5 0 1 1-.7 3.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol>
+    <symbol id="i-rot-r" viewBox="0 0 16 16"><path d="M12.8 6.4H9.4V3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.4 6.2a5 5 0 1 0 .7 3.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 16 16"><path d="M4 8h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 4v8M4 8h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+    <symbol id="i-fit" viewBox="0 0 16 16"><path d="M6 2.6H2.6V6M10 2.6h3.4V6M6 13.4H2.6V10M10 13.4h3.4V10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-up" viewBox="0 0 16 16"><path d="M4.5 9.5 8 6l3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-down" viewBox="0 0 16 16"><path d="M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 16 16"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-pen" viewBox="0 0 16 16"><path d="M11.2 2.4 13.6 4.8 5.6 12.8 2.4 13.6l.8-3.2 8-8Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></symbol>
+    
+    <symbol id="i-gear" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.3" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 1.6l.9 1.6 1.8-.3.5 1.8 1.7.7-.6 1.7.6 1.7-1.7.7-.5 1.8-1.8-.3L8 14.4l-.9-1.6-1.8.3-.5-1.8-1.7-.7.6-1.7-.6-1.7 1.7-.7.5-1.8 1.8.3L8 1.6Z" fill="none" stroke="currentColor" stroke-width="1.15" stroke-linejoin="round"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 16 16"><path d="M8 14.5s4.6-5 4.6-8a4.6 4.6 0 1 0-9.2 0c0 3 4.6 8 4.6 8Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><circle cx="8" cy="6.4" r="1.7" fill="none" stroke="currentColor" stroke-width="1.3"/></symbol>
+  </defs></svg>
+
+  <div id="onb" class="onb">
+    <div class="onb-card" id="onbFolderPane">
+      <svg class="onb-ico"><use href="#i-dir-open"/></svg>
+      <h2>Scegli la cartella dei rilievi</h2>
+      <p>Per cominciare, indica la cartella che contiene tutti i <strong>rilievi delle camere</strong>.</p>
+      <button type="button" id="onbFolder" class="btn go onb-btn">Scegli la cartella</button>
+    </div>
+
+    <div class="onb-card" id="onbAuthPane" hidden>
+      <svg class="onb-ico"><use href="#i-dir"/></svg>
+      <h2>Autorizza la cartella</h2>
+      <p>Il browser deve chiederti il permesso di leggere e scrivere in <strong id="onbAuthName">questa cartella</strong>. Serve per aprire i rilievi e salvarci sopra le annotazioni.</p>
+      <button type="button" id="onbAuth" class="btn go onb-btn">Autorizza</button>
+    </div>
+
+    <div class="onb-card" id="onbNamePane" hidden>
+      <svg class="onb-ico"><use href="#i-pen"/></svg>
+      <h2>Nome e cognome</h2>
+      <p>Ogni annotazione che scrivi viene firmata con il tuo nome e la data, cos&igrave; si sa sempre chi ha inserito un dato.</p>
+      <input type="text" id="siglaIn" class="in onb-in" placeholder="Nome e cognome" autocomplete="name" />
+      <button type="button" id="siglaOk" class="btn go onb-btn">Continua</button>
+    </div>
+  </div>
+
+  <div id="tourV" class="tv">
+    <div id="tourHole" class="thole"></div>
+    <div id="tourRing" class="tring"></div>
+    <div id="tourPop" class="tpop">
+      <span class="tbar" id="tourBar"></span>
+      <span class="tstep" id="tourStep"></span>
+      <h3 class="ttitle" id="tourTitle"></h3>
+      <p class="ttext" id="tourText"></p>
+      <div class="tfoot">
+        <button type="button" class="tskip" id="tourSkip">Salta la guida</button>
+        <div class="tdots" id="tourDots"></div>
+        <div style="display:flex;gap:6px">
+          <button type="button" class="btn" id="tourBack">Indietro</button>
+          <button type="button" class="btn pri" id="tourNext">Avanti</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <header>
+    <div style="display:flex;align-items:center;gap:10px;min-width:0">
+      <button type="button" id="dwFiles" class="btn ico drawer" aria-label="Rilievi"><svg><use href="#i-menu"/></svg></button>
+      <span class="wordmark">Annotatore rilievi camere</span>
+    </div>
+    <div class="hgroup">
+      <div class="popw">
+        <button type="button" id="guideBtn" class="btn ico" title="Impostazioni" aria-haspopup="true" aria-expanded="false"><svg><use href="#i-gear"/></svg></button>
+        <div class="pop" id="setPop" role="menu">
+          <div class="pop-cap">Impostazioni</div>
+          <button type="button" class="pop-item row" id="siglaChip"><span>Il tuo nome</span><span class="pi-v" id="siglaVal">&mdash;</span></button>
+          <button type="button" class="pop-item row" id="pickFolder"><span id="pickLabel">Cartella dei rilievi</span><span class="pi-v" id="folderVal">&mdash;</span></button>
+          <div class="pop-row">
+            <span>Tema</span>
+            <span class="theme">
+              <svg id="thSun" class="lit"><use href="#i-sun"/></svg>
+              <button type="button" id="themeSw" class="tsw" role="switch" aria-checked="false" aria-label="Tema scuro"></button>
+              <svg id="thMoon"><use href="#i-moon"/></svg>
+            </span>
+          </div>
+          <div class="pop-sep"></div>
+          <button type="button" class="pop-item" id="miTour">Riavvia la guida</button>
+          <button type="button" class="pop-item" id="miKeys">Scorciatoie da tastiera</button>
+        </div>
+      </div>
+      <button type="button" id="dwInsp" class="btn ico drawer" aria-label="Dati"><svg><use href="#i-pen"/></svg></button>
+    </div>
+  </header>
+
+  <div class="ws">
+    <aside id="files" class="files">
+      <div class="ph"><span class="cap">Rilievi</span><span id="folderName" class="note">&mdash;</span></div>
+      <div class="search"><input type="text" id="treeFilter" class="in" placeholder="Cerca&hellip;" autocomplete="off" /></div>
+      <div id="tree" class="tree"><div class="none">Nessuna cartella scelta.</div></div>
+      <div id="grip" class="grip"></div>
+    </aside>
+
+    <main class="main">
+      <div class="bar" id="toolbar">
+        <button type="button" id="addBtn" class="btn pri" disabled title="Nuova annotazione (Ctrl+Invio, oppure doppio clic sul rilievo)" style="flex-shrink:0"><svg style="width:12px;height:12px"><use href="#i-plus"/></svg> <span class="lbl">Annotazione</span></button>
+        <div class="crumbs" id="crumbs"><span class="cr">Nessun rilievo aperto</span><span class="udot"></span></div>
+        <div class="savewrap">
+          <label class="mini" title="Salva quando passi a un altro rilievo">
+            <input type="checkbox" id="autosave" class="vh" checked /><span class="sw"></span> <span class="lbl">Autosalvataggio</span>
+          </label>
+          <button type="button" id="autoInfo" class="btn ico info-b" title="Cos'&egrave; l'autosalvataggio"><svg><use href="#i-info"/></svg></button>
+          <button type="button" id="saveBtn" class="btn go" disabled title="Salva e passa al rilievo successivo (Ctrl+S)"><svg style="width:13px;height:13px"><use href="#i-check"/></svg> Salva</button>
+        </div>
+      </div>
+
+      <div class="statusbar" id="statusBar" hidden>
+        <svg class="sb-ico"><use href="#i-info" id="sbIcoUse"/></svg>
+        <span class="sb-text" id="sbText"></span>
+        <button type="button" class="btn sb-act" id="sbAct" hidden></button>
+        <button type="button" class="sb-x" id="sbClose" aria-label="Chiudi">&times;</button>
+      </div>
+      <div id="viewer" class="scroll">
+        <div class="blank"><svg style="width:34px;height:34px;opacity:.35"><use href="#i-pdf"/></svg>
+          <div style="font-size:13.5px;font-weight:600;color:var(--ink-2)">Nessun rilievo aperto</div>
+          <div style="font-size:12.5px">Scegli un rilievo nell'elenco a sinistra.</div></div>
+      </div>
+
+      <div class="hintbar" id="hintBar">Clicca sul rilievo dove vuoi l'annotazione &middot; Esc per annullare</div>
+
+      <div class="deck" id="deck">
+        <button type="button" id="rotL" class="btn ico" disabled title="Ruota a sinistra (solo vista)"><svg><use href="#i-rot-l"/></svg></button>
+        <button type="button" id="rotR" class="btn ico" disabled title="Ruota a destra (solo vista)"><svg><use href="#i-rot-r"/></svg></button>
+        <span class="dv"></span>
+        <button type="button" id="zIn" class="btn ico" disabled title="Ingrandisci"><svg><use href="#i-plus"/></svg></button>
+        <span class="zbox"><input type="text" id="zVal" class="zin num" value="100" disabled aria-label="Zoom" title="Zoom in percentuale (Ctrl + rotellina)" /><span class="zpc">%</span></span>
+        <button type="button" id="zOut" class="btn ico" disabled title="Riduci"><svg><use href="#i-minus"/></svg></button>
+        <button type="button" id="zFit" class="btn ico" disabled title="Adatta alla finestra"><svg><use href="#i-fit"/></svg></button>
+        <span class="dv"></span>
+        <button type="button" id="pgUp" class="btn ico" disabled title="Pagina precedente (Pag\u2191)"><svg><use href="#i-up"/></svg></button>
+        <span class="zbox"><input type="text" id="pgVal" class="zin num" value="1" disabled aria-label="Pagina" title="Numero di pagina" /><span class="zpc" id="pgTot">/1</span></span>
+        <button type="button" id="pgDn" class="btn ico" disabled title="Pagina successiva (Pag\u2193)"><svg><use href="#i-down"/></svg></button>
+      </div>
+    </main>
+
+    <aside id="insp" class="insp lock">
+      <div class="ph"><span class="cap">Annotazione</span><span id="anCount" class="note">&mdash;</span></div>
+      <div class="veil">
+        <svg style="width:22px;height:22px;color:var(--ink-3)"><use href="#i-pin"/></svg>
+        <div class="h">Nessuna annotazione selezionata</div>
+        <div class="p">Doppio clic sul rilievo per crearne una, oppure clicca su una gi&agrave; presente.</div>
+      </div>
+
+      <div class="ib">
+        <div class="raw" id="rawOnly" style="display:none">
+          <span class="fl">Anteprima esatta del box</span>
+          <textarea id="rawText" spellcheck="false"></textarea>
+        </div>
+
+        <div id="struct" style="display:none;flex-direction:column;gap:8px;flex:1;min-height:0">
+          <div class="box"><div class="bh"><span class="cap">Rilievo</span></div><div class="bb">
+            <div class="duo">
+              <div class="fld"><label class="fl" for="fRete">Rete</label>
+                <div class="pre"><span>63</span><input type="text" id="fRete" class="in" placeholder="41" autocomplete="off" /></div></div>
+              <div class="fld"><label class="fl" for="fGaia">GAIA ID</label>
+                <input type="text" id="fGaia" class="in" placeholder="G-99210" autocomplete="off" /></div>
+            </div>
+            <div class="fld"><label class="fl" for="fAsset">PTA-AM Asset Id N&deg;</label>
+              <input type="text" id="fAsset" class="in" placeholder="10293847" autocomplete="off" /></div>
+          </div></div>
+
+          <div class="box"><div class="bh"><span class="cap">Coordinate</span><span class="cap">CH03</span></div><div class="bb">
+            <div class="cgrid">
+              <input type="text" id="fX" class="in num" placeholder="704 600" autocomplete="off" inputmode="numeric" />
+              <span class="slash">/</span>
+              <input type="text" id="fY" class="in num" placeholder="114 100" autocomplete="off" inputmode="numeric" />
+            </div>
+            <span class="hint" id="coordHint"></span>
+          </div></div>
+
+          <div class="box grow"><div class="bh"><span class="cap">Indirizzo</span>
+              <button type="button" id="geoBtn" class="btn" style="height:22px;padding:0 8px;font-size:11.5px">Ricerca</button></div>
+            <div class="bb">
+              <div class="duo">
+                <div class="fld"><label class="fl" for="fVia"><span class="src" id="viaSrc"></span>Via</label>
+                  <input type="text" id="fVia" class="in" placeholder="Via e civico" autocomplete="off" /></div>
+                <div class="fld"><label class="fl" for="fCap"><span class="src" id="capSrc"></span>CAP e citt&agrave;</label>
+                  <input type="text" id="fCap" class="in" placeholder="6600 Locarno" autocomplete="off" /></div>
+              </div>
+              <div class="stat"><span class="led" id="led"></span><span id="statTxt">In attesa delle coordinate</span></div>
+              <div class="picks" id="picks"></div>
+              <div class="mapwrap"><div id="map"></div><div class="mfb" id="mapFb">La mappa appare con le coordinate.</div></div>
+            </div>
+          </div>
+
+          <div class="box"><div class="bh"><span class="cap">Osservazioni</span><span class="opt">facoltativo</span></div><div class="bb">
+            <input type="text" id="fOss" class="in" placeholder="Nota libera, lasciala vuota se non serve" autocomplete="off" />
+          </div></div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
+  <script>
+    'use strict';
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    const LS = { sigla:'ar_sigla', nome:'ar_nome', exp:'ar_exp', last:'ar_last', autosave:'ar_autosave', zoom:'ar_zoom', tour:'ar_tour', theme:'ar_theme', pending:'ar_pending' };
+    const FONT_PT = 8, LINE = 1.25, PX = 3.5, PY = 2.5;
+    const MAX_CANVAS_PX = 14e6, KEEP_RENDERED = 10;
+    var map = null, mHere = null, mHalo = null, mRing = null, mAddr = null, mLine = null, mLineCase = null, mWms = null;
+
+    const idb = {
+      db:null,
+      getDb(){ if(this.db) return Promise.resolve(this.db);
+        return new Promise((res,rej)=>{ const q=indexedDB.open('AnnotatoreRilieviDB',1);
+          q.onupgradeneeded=e=>e.target.result.createObjectStore('h');
+          q.onsuccess=e=>{this.db=e.target.result;res(this.db);}; q.onerror=rej; }); },
+      async get(k){ const d=await this.getDb(); return new Promise((res,rej)=>{ const r=d.transaction('h','readonly').objectStore('h').get(k); r.onsuccess=()=>res(r.result); r.onerror=rej; }); },
+      async set(k,v){ const d=await this.getDb(); return new Promise((res,rej)=>{ const r=d.transaction('h','readwrite').objectStore('h').put(v,k); r.onsuccess=()=>res(); r.onerror=rej; }); }
+    };
+
+    let sigla = localStorage.getItem(LS.nome) || localStorage.getItem(LS.sigla) || '';
+    const state = {
+      root:null, tree:[], filter:'', exp:new Set(JSON.parse(localStorage.getItem(LS.exp)||'[]')), saved:new Set(),
+      file:{ handle:null, path:'', name:'', bytes:null },
+      doc:null, pages:[], rotation:0, hideMode:'none',
+      zoomMode: localStorage.getItem(LS.zoom)==='custom' ? 'custom' : 'fit', zoom:1,
+      annots:[], sel:null, dirty:false, saving:false, placing:false,
+      markSaved:null, markNext:null, advancing:false, trace:[], broken:new Set(), log:[],
+      hist:[], fut:[]
+    };
+
+    const $ = i => document.getElementById(i);
+    const E = {
+      pick:$('pickFolder'), folder:$('folderName'), tree:$('tree'), files:$('files'), insp:$('insp'), grip:$('grip'),
+      filter:$('treeFilter'), dwFiles:$('dwFiles'), dwInsp:$('dwInsp'),
+      viewer:$('viewer'), crumbs:$('crumbs'),
+      rotL:$('rotL'), rotR:$('rotR'), zIn:$('zIn'), zOut:$('zOut'), zFit:$('zFit'), zVal:$('zVal'),
+      pgUp:$('pgUp'), pgDn:$('pgDn'), pgVal:$('pgVal'), pgTot:$('pgTot'), deck:$('deck'),
+      autosave:$('autosave'), save:$('saveBtn'), add:$('addBtn'), hint:$('hintBar'), anCount:$('anCount'),
+      statusBar:$('statusBar'), sbText:$('sbText'), sbAct:$('sbAct'), sbClose:$('sbClose'), sbIcoUse:$('sbIcoUse'),
+      rawOnly:$('rawOnly'), rawText:$('rawText'), struct:$('struct'),
+      rete:$('fRete'), asset:$('fAsset'), gaia:$('fGaia'), x:$('fX'), y:$('fY'), coordHint:$('coordHint'),
+      via:$('fVia'), cap:$('fCap'), viaSrc:$('viaSrc'), capSrc:$('capSrc'), oss:$('fOss'),
+      led:$('led'), statTxt:$('statTxt'), geoBtn:$('geoBtn'), mapEl:$('map'), mapFb:$('mapFb'), picks:$('picks'),
+      themeSw:$('themeSw'), thSun:$('thSun'), thMoon:$('thMoon'),
+      siglaChip:$('siglaChip'), siglaIn:$('siglaIn'), siglaOk:$('siglaOk'),
+      siglaVal:$('siglaVal'), folderVal:$('folderVal'), pickLabel:$('pickLabel'),
+      onb:$('onb'), onbFolderPane:$('onbFolderPane'), onbAuthPane:$('onbAuthPane'), onbNamePane:$('onbNamePane'),
+      onbFolder:$('onbFolder'), onbAuth:$('onbAuth'), onbAuthName:$('onbAuthName'),
+      setPop:$('setPop'), miTour:$('miTour'), miKeys:$('miKeys'), autoInfo:$('autoInfo'),
+      guide:$('guideBtn'), toasts:$('toasts'),
+      tourBar:$('tourBar'),
+      tourV:$('tourV'), tourHole:$('tourHole'), tourRing:$('tourRing'), tourPop:$('tourPop'),
+      tourStep:$('tourStep'), tourTitle:$('tourTitle'), tourText:$('tourText'), tourDots:$('tourDots'),
+      tourNext:$('tourNext'), tourBack:$('tourBack')
+    };
+
+    function svgIcon(id, cls) {
+      const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      const u = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+      u.setAttribute('href', '#' + id); s.appendChild(u);
+      if (cls) s.setAttribute('class', cls);
+      return s;
+    }
+    function toast(msg, kind, big) {
+      const t = document.createElement('div');
+      t.className = 'toast ' + (kind || '');
+      const i = document.createElement('i');
+      i.appendChild(svgIcon(kind === 'er' ? 'i-x' : kind === 'ok' ? 'i-check' : kind === 'wr' ? 'i-warn' : 'i-info'));
+      const s = document.createElement('span'); s.textContent = msg;
+      t.append(i, s); E.toasts.appendChild(t);
+      t.title = 'Clicca per chiudere';
+      t.addEventListener('click', () => { t.style.opacity = '0'; t.style.transform = 'translateX(18px)'; setTimeout(() => t.remove(), 260); });
+      const ms = big ? 16000 : kind === 'er' ? 30000 : kind === 'wr' ? 18000 : 12000;
+      if (big) t.classList.add('big');
+      setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateX(18px)'; setTimeout(() => t.remove(), 300); }, ms);
+    }
+    function icon13(id) { const i = svgIcon(id); i.setAttribute('style','width:13px;height:13px'); return i; }
+    function setSaveBtn(mode) {
+      const b = E.save;
+      b.textContent = '';
+      b.classList.toggle('busy', mode === 'busy');
+      b.classList.toggle('done', mode === 'done');
+      if (mode === 'busy') { const sp = document.createElement('span'); sp.className = 'spin'; b.appendChild(sp); b.append('Salvo\u2026'); }
+      else { b.appendChild(icon13('i-check')); b.append(mode === 'done' ? 'Salvato' : 'Salva'); }
+    }
+    function setGeoBusy(on) {
+      E.geoBtn.classList.toggle('busy', on);
+      E.geoBtn.textContent = '';
+      if (on) { const sp = document.createElement('span'); sp.className = 'spin'; sp.style.cssText = 'width:10px;height:10px'; E.geoBtn.appendChild(sp); }
+      E.geoBtn.append(on ? 'Cerco' : 'Ricerca');
+    }
+    const emsg = e => (e && e.message) ? e.message : String(e || 'errore');
+
+    // L'esito dell'ultimo salvataggio resta sotto la barra finche non si agisce:
+    // una notifica che sparisce non basta per capire cosa e successo.
+    function setStatus(kind, text, actLabel, actFn) {
+      E.statusBar.className = 'statusbar ' + (kind || '');
+      E.statusBar.hidden = false;
+      E.sbText.textContent = text;
+      E.sbIcoUse.setAttribute('href', kind === 'er' ? '#i-x' : kind === 'wr' ? '#i-warn' : kind === 'ok' ? '#i-check' : '#i-info');
+      if (actLabel && actFn) {
+        E.sbAct.hidden = false;
+        E.sbAct.textContent = actLabel;
+        E.sbAct.onclick = () => { clearStatus(); actFn(); };
+      } else { E.sbAct.hidden = true; E.sbAct.onclick = null; }
+    }
+    const clearStatus = () => { E.statusBar.hidden = true; E.sbAct.hidden = true; E.sbAct.onclick = null; };
+    // traccia leggibile: se qualcosa si inceppa, si vede dove
+    // Traccia numerata: ogni passo del salvataggio e dell'apertura finisce
+    // in console, con i millisecondi trascorsi dall'inizio.
+    let traceT0 = 0;
+    const nowT = () => (window.performance && performance.now) ? performance.now() : Date.now();
+    function step(tag, n, msg) {
+      const dt = traceT0 ? Math.round(nowT() - traceT0) : 0;
+      const line = '[' + tag + ' ' + String(n).padStart(2, '0') + '] +' + dt + 'ms  ' + msg;
+      const t = new Date();
+      state.log.push(t.toTimeString().slice(0, 8) + '  ' + line);
+      if (state.log.length > 250) state.log.shift();
+      try {
+        console.log('%c' + line, 'color:' + (tag === 'SAVE' ? '#0a58ff' : '#0a8f4d') + ';font-weight:600');
+      } catch (e) {}
+    }
+    const endTrace = () => { try { console.groupEnd(); } catch (e) {} };
+
+    // riquadro di spiegazione, usato dai pulsanti con la (i)
+    function infoBox(title, text) {
+      let m = document.getElementById('infoModal');
+      if (!m) {
+        m = document.createElement('div');
+        m.id = 'infoModal'; m.className = 'modal';
+        m.innerHTML = '<div class="card"><h3></h3><p></p><button type="button" class="btn pri">Ho capito</button></div>';
+        m.addEventListener('click', ev => { if (ev.target === m) m.classList.remove('op'); });
+        m.querySelector('button').addEventListener('click', () => m.classList.remove('op'));
+        document.body.appendChild(m);
+      }
+      m.querySelector('h3').textContent = title;
+      m.querySelector('p').textContent = text;
+      m.classList.add('op');
+    }
+
+    /* ------------------------------------------------------------
+       La pagina non dovrebbe MAI ricaricarsi mentre si salva.
+       Se succede lo stesso (tipico con Live Server che sorveglia la
+       cartella dei PDF: ogni scrittura fa ripartire la pagina), qui
+       resta scritto a che punto eravamo, e al riavvio si riprende.
+       ------------------------------------------------------------ */
+    function markPending(savedPath, nextPath) {
+      try { localStorage.setItem(LS.pending, JSON.stringify({ saved:savedPath, next:nextPath, t:Date.now() })); } catch (e) {}
+    }
+    function clearPending() { try { localStorage.removeItem(LS.pending); } catch (e) {} }
+    function readPending() {
+      try {
+        const raw = localStorage.getItem(LS.pending);
+        if (!raw) return null;
+        const p = JSON.parse(raw);
+        return (p && p.t && Date.now() - p.t < 180000) ? p : null;
+      } catch (e) { return null; }
+    }
+
+    // Live Server e simili iniettano uno script che ricarica la pagina
+    function liveServerDetected() {
+      try {
+        return Array.prototype.some.call(document.scripts, sc =>
+          /live[-\s]?server|livereload|__whm|hot-update|websocket/i.test(sc.textContent || '') ||
+          /livereload|live-server|browser-sync/i.test(sc.src || ''));
+      } catch (e) { return false; }
+    }
+    function log(msg) {
+      const t = new Date();
+      const line = t.toTimeString().slice(0,8) + '.' + String(t.getMilliseconds()).padStart(3,'0') + '  ' + msg;
+      state.log.push(line);
+      if (state.log.length > 120) state.log.shift();
+      try { console.log('[annotatore] ' + line); } catch (e) {}
+    }
+    window.addEventListener('error', e => toast('Errore imprevisto: ' + emsg(e.error || e.message), 'er'));
+    window.addEventListener('unhandledrejection', e => toast('Operazione non riuscita: ' + emsg(e.reason), 'er'));
+    const setDirty = v => {
+      state.dirty = v;
+      E.crumbs.classList.toggle('dirty', !!v && !!state.file.path);
+      if (v) scheduleIdleSave();          // dichiarata piu sotto, sollevata
+    };
+    const fmtSize = b => b < 1024 ? b + ' B' : b < 1048576 ? Math.round(b/1024) + ' kB' : (b/1048576).toFixed(1) + ' MB';
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+
+    /* tema */
+    function setTheme(t) {
+      document.documentElement.dataset.theme = t;
+      localStorage.setItem(LS.theme, t);
+      E.themeSw.setAttribute('aria-checked', t === 'dark' ? 'true' : 'false');
+      E.thSun.classList.toggle('lit', t !== 'dark');
+      E.thMoon.classList.toggle('lit', t === 'dark');
+      if (map) { restyleMap(); setTimeout(() => map.invalidateSize({ animate:false }), 80); }
+    }
+    E.themeSw.addEventListener('click', () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'));
+
+    setTheme(localStorage.getItem(LS.theme) === 'dark' ? 'dark' : 'light');
+
+    /* sigla */
+    const refreshSigla = () => { E.siglaVal.textContent = sigla || 'Da impostare'; E.siglaChip.title = 'Firmi come ' + (sigla || '\u2014'); };
+    // il nome della cartella compare sia nell'elenco sia nelle impostazioni
+    const showFolder = n => { E.folder.textContent = n; E.folderVal.textContent = n; };
+    /* ------------------------------------------------------------
+       Avvio guidato: una schermata alla volta, niente altro attorno.
+       cartella → (autorizzazione) → nome → guida
+       ------------------------------------------------------------ */
+    let onbAfterName = null;
+    function showOnb(pane, afterName) {
+      onbAfterName = afterName || null;
+      E.onbFolderPane.hidden = pane !== 'folder';
+      E.onbAuthPane.hidden = pane !== 'auth';
+      E.onbNamePane.hidden = pane !== 'name';
+      E.onb.classList.add('op');
+      if (pane === 'name') { E.siglaIn.value = sigla; setTimeout(() => E.siglaIn.focus(), 60); }
+    }
+    const hideOnb = () => E.onb.classList.remove('op');
+    const openSigla = () => showOnb('name', hideOnb);
+    E.siglaOk.addEventListener('click', () => {
+      const v = E.siglaIn.value.trim().replace(/\s+/g, ' ');
+      if (!v) { E.siglaIn.classList.add('bad'); E.siglaIn.focus(); return; }
+      sigla = v; localStorage.setItem(LS.nome, v);
+      E.siglaIn.classList.remove('bad'); refreshSigla();
+      const after = onbAfterName; onbAfterName = null;
+      if (after) after(); else hideOnb();
+    });
+    E.siglaIn.addEventListener('keydown', e => { if (e.key === 'Enter') E.siglaOk.click(); });
+    E.siglaChip.addEventListener('click', openSigla);
+    refreshSigla();
+
+    if (localStorage.getItem(LS.autosave) === '0') E.autosave.checked = false;
+    E.autosave.addEventListener('change', () => localStorage.setItem(LS.autosave, E.autosave.checked ? '1' : '0'));
+    E.dwFiles.addEventListener('click', () => E.files.classList.toggle('op'));
+    E.dwInsp.addEventListener('click', () => E.insp.classList.toggle('op'));
+
+    let rz = false;
+    E.grip.addEventListener('mousedown', e => { e.preventDefault(); rz = true; E.grip.classList.add('rz'); document.body.style.cursor='col-resize'; document.body.style.userSelect='none'; });
+    window.addEventListener('mousemove', e => { if (rz) E.files.style.width = Math.max(190, Math.min(e.clientX, 520)) + 'px'; });
+    window.addEventListener('mouseup', () => { if (!rz) return; rz=false; E.grip.classList.remove('rz'); document.body.style.cursor=''; document.body.style.userSelect=''; if (state.zoomMode==='fit' && state.doc) relayoutSoon(); });
+
+    /* ---------- cartella e albero ---------- */
+    async function pickDir() {
+      if (!window.showDirectoryPicker) { toast('Serve Chrome o Edge su computer.', 'er'); return; }
+      try {
+        const h = await window.showDirectoryPicker({ mode:'readwrite' });
+        await idb.set('root', h); state.root = h; state.broken.clear(); fsx.reset();
+        showFolder(h.name); E.pickLabel.textContent = 'Cartella dei rilievi';
+        delete E.pick.dataset.auth; E.pick.classList.remove('pri');
+        await scanTree();
+        const n = flatPdfs(state.tree).length;
+      } catch (err) { if (err.name !== 'AbortError') toast('Cartella non aperta: ' + emsg(err), 'er'); }
+    }
+    E.onbFolder.addEventListener('click', async () => {
+      await pickDir();
+      if (!state.root) return;                       // annullata: si resta qui
+      if (!sigla) showOnb('name', () => { hideOnb(); if (!localStorage.getItem(LS.tour)) startTour(0); });
+      else { hideOnb(); if (!localStorage.getItem(LS.tour)) startTour(0); }
+    });
+    E.onbAuth.addEventListener('click', async () => {
+      try {
+        const h = await idb.get('root');
+        if (h && (await h.requestPermission({ mode:'readwrite' })) === 'granted') {
+          await bootWithRoot(h);
+        }
+      } catch (e) { toast('Autorizzazione non riuscita: ' + emsg(e), 'er'); }
+    });
+
+    E.pick.addEventListener('click', async () => {
+      if (E.pick.dataset.auth) {
+        try {
+          const h = await idb.get('root');
+          if (h && (await h.requestPermission({ mode:'readwrite' })) === 'granted') {
+            state.root = h; showFolder(h.name); E.pickLabel.textContent = 'Cartella dei rilievi';
+            delete E.pick.dataset.auth; E.pick.classList.remove('pri'); fsx.reset();
+            await scanTree(); return;
+          }
+        } catch (err) { toast('Autorizzazione non riuscita: ' + emsg(err), 'er'); }
+      }
+      await pickDir();
+    });
+
+    const sorter = (a,b) => a.kind === b.kind ? a.name.localeCompare(b.name, undefined, { numeric:true }) : (a.kind === 'directory' ? -1 : 1);
+    async function walkDir(dir, base = '') {
+      const out = [];
+      for await (const en of dir.values()) {
+        const p = base ? base + '/' + en.name : en.name;
+        if (en.kind === 'directory') out.push({ kind:'directory', name:en.name, path:p, children:(await walkDir(en, p)).sort(sorter) });
+        else if (en.name.toLowerCase().endsWith('.pdf')) out.push({ kind:'file', name:en.name, path:p, isPdf:true });
+      }
+      return out.sort(sorter);
+    }
+    function flatPdfs(nodes) { let l = []; for (const n of nodes) { if (n.kind === 'file') l.push(n); else l = l.concat(flatPdfs(n.children)); } return l; }
+    async function scanTree() {
+      if (!state.root) return;
+      try { state.tree = await walkDir(state.root); drawTree(); }
+      catch (err) { toast('Cartella illeggibile: ' + emsg(err), 'er'); }
+    }
+    const hit = (n,q) => !q || (n.kind === 'file' ? n.name.toLowerCase().includes(q) : n.children.some(c => hit(c,q)));
+    const rowFor = p => treeRows.get(p) || null;
+
+    // ---- elenco incrementale ----------------------------------------------
+    // L'albero non viene piu ricostruito da zero: le righe gia presenti vengono
+    // riusate e aggiornate. Cosi un aggiornamento della cartella non fa
+    // sfarfallare l'elenco ne perdere la posizione di scorrimento.
+    const treeRows = new Map();
+    let treeEmptyEl = null;
+
+    function visibleRows() {
+      const q = state.filter.trim().toLowerCase();
+      const out = [];
+      (function walk(nodes, lvl) {
+        nodes.forEach(n => {
+          if (!hit(n, q)) return;
+          const open = n.kind === 'directory' ? (q ? true : state.exp.has(n.path)) : false;
+          out.push({ n, lvl, open });
+          if (n.kind === 'directory' && open && n.children.length) walk(n.children, lvl + 1);
+        });
+      })(state.tree, 0);
+      return out;
+    }
+
+    function buildRow(item) {
+      const n = item.n;
+      const r = document.createElement('div');
+      r.className = 'row';
+      r.dataset.path = n.path;
+      r.dataset.kind = n.kind;
+      if (n.kind === 'directory') {
+        const c = document.createElement('span'); c.className = 'cv'; c.appendChild(svgIcon('i-chev'));
+        const i = document.createElement('span'); i.className = 'ic dir';
+        const t = document.createElement('span'); t.className = 'nm';
+        r.append(c, i, t);
+        r.addEventListener('click', () => {
+          const path = r.dataset.path;
+          state.exp.has(path) ? state.exp.delete(path) : state.exp.add(path);
+          localStorage.setItem(LS.exp, JSON.stringify([...state.exp]));
+          drawTree();
+        });
+      } else {
+        const sp = document.createElement('span'); sp.style.cssText = 'width:14px;flex-shrink:0';
+        const i = document.createElement('span'); i.className = 'ic pdf'; i.appendChild(svgIcon('i-pdf'));
+        const t = document.createElement('span'); t.className = 'nm';
+        r.append(sp, i, t);
+        r.addEventListener('click', () => { E.files.classList.remove('op'); state.broken.delete(r.dataset.path); openFile(r.dataset.path); });
+      }
+      return r;
+    }
+
+    function updateRow(el, item) {
+      const n = item.n;
+      const pad = (item.lvl * 14 + 8) + 'px';
+      if (el.style.paddingLeft !== pad) el.style.paddingLeft = pad;
+      const nm = el.querySelector('.nm');
+      if (nm.textContent !== n.name) nm.textContent = n.name;
+
+      if (n.kind === 'directory') {
+        el.querySelector('.cv').classList.toggle('op', item.open);
+        const ic = el.querySelector('.ic');
+        const want = item.open ? 'i-dir-open' : 'i-dir';
+        if (ic.dataset.icon !== want) { ic.dataset.icon = want; ic.textContent = ''; ic.appendChild(svgIcon(want)); }
+      } else {
+        // la spunta accompagna solo l'animazione del salvataggio, poi sparisce
+        const wantTick = state.markSaved === n.path;
+        const tick = el.querySelector('.tick');
+        if (wantTick && !tick) { const k = document.createElement('span'); k.className = 'tick'; k.appendChild(svgIcon('i-check')); el.appendChild(k); }
+        else if (!wantTick && tick) tick.remove();
+      }
+      el.classList.toggle('act', state.file.path === n.path);
+      el.classList.toggle('saved', state.markSaved === n.path);
+      el.classList.toggle('coming', state.markNext === n.path);
+    }
+
+    function setTreeEmpty(msg) {
+      treeRows.forEach(el => el.remove());
+      treeRows.clear();
+      if (!treeEmptyEl) { treeEmptyEl = document.createElement('div'); treeEmptyEl.className = 'none'; }
+      treeEmptyEl.textContent = msg;
+      if (treeEmptyEl.parentNode !== E.tree) E.tree.appendChild(treeEmptyEl);
+    }
+
+    function drawTree() {
+      if (!state.tree.length) return setTreeEmpty('Nessun PDF.');
+      const list = visibleRows();
+      if (!list.length) return setTreeEmpty('Nessun risultato.');
+      if (treeEmptyEl && treeEmptyEl.parentNode) treeEmptyEl.remove();
+
+      const seen = new Set();
+      let prev = null;
+      list.forEach(item => {
+        const key = item.n.path;
+        seen.add(key);
+        let el = treeRows.get(key);
+        if (!el) { el = buildRow(item); treeRows.set(key, el); }
+        updateRow(el, item);
+        const at = prev ? prev.nextSibling : E.tree.firstChild;
+        if (el !== at) E.tree.insertBefore(el, at);
+        prev = el;
+      });
+      treeRows.forEach((el, key) => { if (!seen.has(key)) { el.remove(); treeRows.delete(key); } });
+
+      // porta in vista solo se serve, e mai mentre e in corso l'avanzamento
+      const focus = state.markNext || state.markSaved || state.file.path;
+      if (focus && !state.advancing) {
+        const el = treeRows.get(focus);
+        if (el && el.getBoundingClientRect) {
+          const cr = E.tree.getBoundingClientRect(), rr = el.getBoundingClientRect();
+          if (rr.top < cr.top || rr.bottom > cr.bottom) E.tree.scrollTop += (rr.top + rr.height / 2) - (cr.top + cr.height / 2);
+        }
+      }
+    }
+    E.filter.addEventListener('input', () => { state.filter = E.filter.value; drawTree(); });
+
+    function drawCrumbs() {
+      E.crumbs.textContent = '';
+      if (!state.file.path) {
+        const s = document.createElement('span'); s.className = 'cr';
+        s.textContent = state.root ? 'Scegli un rilievo' : 'Nessun rilievo aperto';
+        E.crumbs.appendChild(s);
+      } else {
+        const parts = state.file.path.split('/');
+        const root = document.createElement('button');
+        root.type='button'; root.className='cr lk'; root.textContent = state.root ? state.root.name : 'Cartella';
+        root.addEventListener('click', () => E.files.classList.add('op'));
+        E.crumbs.appendChild(root);
+        let acc = '';
+        parts.forEach((p,i) => {
+          const sp = document.createElement('span'); sp.className='crs'; sp.textContent='/'; E.crumbs.appendChild(sp);
+          acc = acc ? acc + '/' + p : p;
+          const last = i === parts.length - 1;
+          const el = document.createElement(last ? 'span' : 'button');
+          el.className = 'cr ' + (last ? 'cur' : 'lk'); el.textContent = p; el.title = p;
+          if (!last) { const tg = acc; el.type='button'; el.addEventListener('click', () => { state.exp.add(tg); drawTree(); E.files.classList.add('op'); }); }
+          E.crumbs.appendChild(el);
+        });
+      }
+      const d = document.createElement('span'); d.className = 'udot'; E.crumbs.appendChild(d);
+    }
+
+    // apre le cartelle che contengono il file: senza questo l'evidenziazione
+    // nell'elenco resterebbe invisibile
+    function revealPath(path) {
+      const parts = path.split('/');
+      let acc = '', changed = false;
+      for (let i = 0; i < parts.length - 1; i++) {
+        acc = acc ? acc + '/' + parts[i] : parts[i];
+        if (!state.exp.has(acc)) { state.exp.add(acc); changed = true; }
+      }
+      if (changed) { localStorage.setItem(LS.exp, JSON.stringify([...state.exp])); drawTree(); }
+      return changed;
+    }
+
+    // scorrimento morbido dell'elenco: durata sotto controllo, niente salti
+    function scrollTreeTo(path, ms) {
+      const row = rowFor(path), c = E.tree;
+      if (!row || !c || !row.getBoundingClientRect) return Promise.resolve();
+      const cr = c.getBoundingClientRect(), rr = row.getBoundingClientRect();
+      const max = Math.max(0, c.scrollHeight - c.clientHeight);
+      const target = Math.max(0, Math.min(c.scrollTop + (rr.top + rr.height/2) - (cr.top + cr.height/2), max));
+      const from = c.scrollTop;
+      if (!ms || Math.abs(target - from) < 2) { c.scrollTop = target; return Promise.resolve(); }
+      return new Promise(res => {
+        const t0 = nowMs();
+        const step = () => {
+          const k = Math.min(1, (nowMs() - t0) / ms);
+          c.scrollTop = from + (target - from) * (1 - Math.pow(1 - k, 3));
+          if (k < 1) requestAnimationFrame(step); else res();
+        };
+        requestAnimationFrame(step);
+      });
+    }
+
+    /* ============================================================
+       ACCESSO AI FILE
+       Gli handle delle cartelle restano in cache: risalire il percorso a ogni
+       lettura costava una chiamata asincrona per livello. Dopo un salvataggio
+       si rilegge SOLO la cartella toccata, mai l'albero intero.
+       ============================================================ */
+    const fsx = {
+      dirs: new Map(),
+      reset() { this.dirs.clear(); },
+      split(path) { const i = path.lastIndexOf('/'); return i === -1 ? ['', path] : [path.slice(0,i), path.slice(i+1)]; },
+      async dir(dirPath) {
+        if (!dirPath) return state.root;
+        const hit = this.dirs.get(dirPath);
+        if (hit) return hit;
+        const parts = dirPath.split('/');
+        let cur = state.root, acc = '';
+        for (const part of parts) {
+          acc = acc ? acc + '/' + part : part;
+          const c = this.dirs.get(acc);
+          if (c) { cur = c; continue; }
+          cur = await cur.getDirectoryHandle(part);
+          this.dirs.set(acc, cur);
+        }
+        return cur;
+      },
+      async fileHandle(path, create) {
+        const [d, name] = this.split(path);
+        const dir = await this.dir(d);
+        return create ? dir.getFileHandle(name, { create:true }) : dir.getFileHandle(name);
+      },
+      async read(path) {
+        const h = await this.fileHandle(path);
+        const f = await h.getFile();
+        return { handle:h, bytes:new Uint8Array(await f.arrayBuffer()) };
+      },
+      async write(path, bytes) {
+        const h = await this.fileHandle(path, true);
+        const w = await h.createWritable();
+        await w.write(bytes);
+        await w.close();
+        return h;
+      },
+      async remove(path) {
+        const [d, name] = this.split(path);
+        const dir = await this.dir(d);
+        await dir.removeEntry(name);
+      }
+    };
+
+    function nodeAt(path) {
+      if (!path) return null;
+      const parts = path.split('/');
+      let list = state.tree, node = null;
+      for (const part of parts) {
+        node = (list || []).find(n => n.name === part);
+        if (!node) return null;
+        list = node.children;
+      }
+      return node;
+    }
+
+    // rilegge una sola cartella e sostituisce i suoi figli: l'elenco si
+    // aggiorna dove serve, senza rifare tutto e senza scatti
+    async function refreshDir(dirPath) {
+      try {
+        const dir = await fsx.dir(dirPath);
+        const kids = [];
+        for await (const en of dir.values()) {
+          const p = dirPath ? dirPath + '/' + en.name : en.name;
+          if (en.kind === 'directory') {
+            const old = nodeAt(p);
+            kids.push(old && old.kind === 'directory' ? old : { kind:'directory', name:en.name, path:p, children:[] });
+          } else if (en.name.toLowerCase().endsWith('.pdf')) {
+            kids.push({ kind:'file', name:en.name, path:p, isPdf:true });
+          }
+        }
+        kids.sort(sorter);
+        if (!dirPath) state.tree = kids;
+        else { const n = nodeAt(dirPath); if (!n) return false; n.children = kids; }
+        drawTree();
+        log('cartella aggiornata: ' + (dirPath || '(radice)') + ' \u2014 ' + kids.length + ' voci');
+        return true;
+      } catch (e) { log('aggiornamento cartella fallito: ' + emsg(e)); return false; }
+    }
+
+    /* ---------- modello ---------- */
+    const blank = () => ({ rete:'', asset:'', x:'', y:'', gaia:'', via:'', cap:'', oss:'', data:'' });
+    const oggi = () => { const d = new Date(), p = v => String(v).padStart(2,'0');
+      return p(d.getDate()) + '.' + p(d.getMonth()+1) + '.' + d.getFullYear(); };
+    const norm = t => String(t == null ? '' : t).replace(/\r\n?/g, '\n').replace(/\u00A0/g, ' ');
+    const oneLine = t => norm(t).replace(/\s*\n+\s*/g, ' \u00B7 ').trim();
+
+    function parseText(text) {
+      const f = blank(); let m2 = 0, tot = 0;
+      norm(text).split('\n').forEach(raw => {
+        const l = raw.trim(); if (!l) return; tot++;
+        let m;
+        if ((m = l.match(/^Rete\s*:\s*(.*)$/i))) { let v = m[1].trim(); if (v.startsWith('63')) v = v.slice(2).trim(); f.rete = v; m2++; }
+        else if ((m = l.match(/^PTA[-\s]?AM\s+Asset\s+Id(?:\s*N[\u00B0\u00BAo]?)?\s*:\s*(.*)$/i))) { f.asset = m[1].trim(); m2++; }
+        else if ((m = l.match(/^Coordinate\s*:\s*(.*)$/i))) { const p = m[1].split('/'); f.x = (p[0]||'').trim(); f.y = (p[1]||'').trim(); m2++; }
+        else if ((m = l.match(/^GAIA\s*ID\s*:\s*(.*)$/i))) { f.gaia = m[1].trim(); m2++; }
+        else if ((m = l.match(/^Via\s*:\s*(.*)$/i))) { f.via = m[1].trim(); m2++; }
+        else if ((m = l.match(/^CAP\s*:\s*(.*)$/i))) { f.cap = m[1].trim(); m2++; }
+        else if ((m = l.match(/^Osservazioni\s*:\s*(.*)$/i))) { f.oss = m[1].trim(); m2++; }
+        else if ((m = l.match(/^Data\s*:\s*(.*)$/i))) { f.data = m[1].trim(); m2++; }
+      });
+      return { f, tpl: tot > 0 && m2 === tot && m2 >= 2 };
+    }
+    function fmt(b) {
+      let t = 'Rete: 63' + (b.rete||'') + '\nPTA-AM Asset Id N\u00B0: ' + (b.asset||'') +
+        '\nCoordinate: ' + (b.x||'') + '/' + (b.y||'') + '\nGAIA ID: ' + (b.gaia||'') +
+        '\nVia: ' + (b.via||'') + '\nCAP: ' + (b.cap||'');
+      const o = (b.oss||'').trim();
+      if (o) t += '\nOsservazioni: ' + o;
+      return t;   // la data non va nel testo: sta nei dati dell'annotazione
+    }
+    const textOf = b => b.mode === 'free' ? (b.raw || '') : fmt(b);
+    const uid = () => 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+    const mkBox = p => Object.assign({ id:uid(), pi:0, xPt:24, yPt:24, wPt:0, hPt:0, fPt:FONT_PT, mode:'structured', raw:'',
+                                       aVia:false, aCap:false, cd:'', md:'', touched:false, pick:0 }, blank(), p || {});
+    // qualunque modifica ridata l'annotazione a oggi, data e ora
+    const touch = b => { if (b) b.touched = true; };
+
+    const snap = () => JSON.stringify({ a:state.annots, s:state.sel });
+    function push() { state.hist.push(snap()); if (state.hist.length > 60) state.hist.shift(); state.fut.length = 0; }
+    function apply(j) { const s = JSON.parse(j); state.annots = s.a; state.sel = s.s; drawAnnots(); syncPanel(); setDirty(true); }
+    const undo = () => { if (state.hist.length) { state.fut.push(snap()); apply(state.hist.pop()); } };
+    const redo = () => { if (state.fut.length) { state.hist.push(snap()); apply(state.fut.pop()); } };
+
+    /* ---------- apertura ---------- */
+    async function openFile(path) {
+      if (state.saving) return;
+      cancelIdleSave();
+      if (state.file.path && state.file.path !== path && state.dirty && E.autosave.checked) await savePdf({ silent:true });
+      await loadFile(path);
+    }
+
+    // Apertura in due fasi.
+    // Fase 1: tutto cio che puo fallire, senza toccare nulla dell'app.
+    // Fase 2: si commuta lo stato. Cosi un errore non lascia mai l'app a meta,
+    //         e il rilievo successivo non resta bloccato per colpa di un passo
+    //         accessorio (era il motivo per cui il salvataggio "tornava indietro").
+    async function loadFile(path) {
+      step('OPEN', 2, 'ATTENDO il disco: lettura di ' + path + '\u2026');
+      const { handle:file, bytes } = await fsx.read(path);
+      step('OPEN', 3, 'letti ' + fmtSize(bytes.length));
+
+      step('OPEN', 4, 'ATTENDO pdf.js: analisi del documento\u2026');
+      const readDoc = await pdfjsLib.getDocument({ data:bytes.slice(0) }).promise;
+      step('OPEN', 5, 'documento analizzato: ' + readDoc.numPages + ' pagine');
+
+      const found = [];
+      try {
+        for (let p = 1; p <= readDoc.numPages; p++) {
+          const pg = await readDoc.getPage(p);
+          const v = pg.view;
+          let ann = [];
+          try { ann = await pg.getAnnotations({ intent:'display' }); } catch (e) {}
+          ann.forEach(a => {
+            if (!(a.subtype === 'FreeText' || a.annotationType === 3)) return;
+            const raw = norm((a.contentsObj && a.contentsObj.str) || a.contents || a.fieldValue || '');
+            const r = Array.isArray(a.rect) && a.rect.length === 4 ? a.rect : null;
+            const x0 = r ? Math.min(r[0],r[2]) : v[0]+24, x1 = r ? Math.max(r[0],r[2]) : x0+120;
+            const y0 = r ? Math.min(r[1],r[3]) : v[3]-60, y1 = r ? Math.max(r[1],r[3]) : y0+40;
+            let fPt = FONT_PT;
+            const da = a.defaultAppearanceData;
+            if (da && da.fontSize > 0) fPt = da.fontSize;
+            else if (typeof a.defaultAppearance === 'string') { const m = a.defaultAppearance.match(/\/\S+\s+([\d.]+)\s+Tf/); if (m && +m[1] > 0) fPt = +m[1]; }
+            const keepDate = d => (typeof d === 'string' && /^D:\d{8}/.test(d)) ? d : '';
+            found.push({ id:a.id, pi:p-1, xPt:Math.max(0,x0-v[0]), yPt:Math.max(0,v[3]-y1), wPt:Math.max(0,x1-x0), hPt:Math.max(0,y1-y0), fPt,
+                         cd:keepDate(a.creationDate), md:keepDate(a.modificationDate), text:raw });
+          });
+        }
+      } catch (e) { /* annotazioni illeggibili: il rilievo si apre lo stesso */ }
+
+      const doc = readDoc;
+      let hideMode = 'none';
+      if (found.length) {
+        const AM = pdfjsLib.AnnotationMode || {};
+        const store = doc.annotationStorage;
+        if (store && AM.ENABLE_STORAGE !== undefined && found.every(x => x.id)) {
+          found.forEach(x => { try { store.setValue(x.id, { hidden:true, noView:true, noPrint:true }); } catch (e) {} });
+          hideMode = 'storage';
+        } else {
+          hideMode = 'all';     // ripiego: nessuna annotazione disegnata da pdf.js
+        }
+      }
+
+      /* ---- da qui in poi si commuta ---- */
+      const prev = state.doc;
+      state.doc = doc;
+      state.hideMode = hideMode;
+      state.file = { handle:file, path, name:file.name, bytes };
+      state.annots = []; state.sel = null; state.hist.length = 0; state.fut.length = 0; state.rotation = 0;
+      lastSel = null;
+      localStorage.setItem(LS.last, path);
+      setDirty(false);
+      E.save.disabled = false; E.add.disabled = false;
+      [E.zIn,E.zOut,E.zFit,E.rotL,E.rotR,E.pgUp,E.pgDn].forEach(b => b.disabled = false);
+      E.zVal.disabled = false; E.pgVal.disabled = false;
+      if (prev && prev !== doc) { try { prev.destroy(); } catch (e) {} }
+      log('aperto ' + path + ' \u2014 ' + doc.numPages + ' pagine, ' + found.length + ' annotazioni');
+
+      found.forEach(x => {
+        const p = parseText(x.text);
+        state.annots.push(mkBox(Object.assign({ pi:x.pi, xPt:x.xPt, yPt:x.yPt, wPt:x.wPt, hPt:x.hPt, fPt:x.fPt, cd:x.cd, md:x.md },
+          p.tpl ? Object.assign({ mode:'structured' }, p.f) : { mode:'free', raw:x.text })));
+      });
+
+      drawCrumbs(); revealPath(path); drawTree();
+      E.viewer.classList.add('swapping');
+      step('OPEN', 6, 'ATTENDO: costruzione delle pagine\u2026');
+      try { await buildPages(); step('OPEN', 7, 'pagine costruite: ' + state.pages.length); }
+      catch (e) { step('OPEN', 7, 'pagine NON costruite: ' + emsg(e)); toast('Pagine non disegnate: ' + emsg(e), 'er'); }
+      requestAnimationFrame(() => {
+        E.viewer.classList.remove('swapping');
+        E.viewer.classList.add('swapped');
+        setTimeout(() => E.viewer.classList.remove('swapped'), 460);
+      });
+      select(null);                      // nessuna selezione automatica all'apertura
+    }
+
+    /* ---------- pagine ---------- */
+    function scaleFor(vp) {
+      if (state.zoomMode === 'custom') return state.zoom;
+      const h = E.viewer.clientHeight - 40, w = E.viewer.clientWidth - 56;
+      return Math.max(.2, Math.min(h/vp.height, w/vp.width));
+    }
+    async function buildPages() {
+      state.pages.forEach(p => { if (p.task) { try { p.task.cancel(); } catch (e) {} } });
+      E.viewer.textContent = '';
+      state.pages = [];
+      const doc = state.doc;
+      for (let n = 1; n <= doc.numPages; n++) {
+        const page = await doc.getPage(n);
+        const probe = page.getViewport({ scale:1, rotation:page.rotate + state.rotation });
+        const scale = scaleFor(probe);
+        const viewport = page.getViewport({ scale, rotation:page.rotate + state.rotation });
+        const wrap = document.createElement('div');
+        wrap.className = 'pg'; wrap.dataset.pi = String(n-1);
+        wrap.style.width = Math.round(viewport.width) + 'px';
+        wrap.style.height = Math.round(viewport.height) + 'px';
+        const sk = document.createElement('div'); sk.className = 'sk';
+        const ov = document.createElement('div'); ov.className = 'ov';
+        wrap.append(sk, ov);
+        wrap.addEventListener('dblclick', ev => onDblPage(ev, n-1));
+        E.viewer.appendChild(wrap);
+        state.pages.push({ page, wrap, ov, sk, canvas:null, task:null, rendered:false, gen:0, viewport, scale,
+          view:page.view.slice(), wPx:viewport.width, hPx:viewport.height,
+          wVPt:page.view[2]-page.view[0], hVPt:page.view[3]-page.view[1] });
+      }
+      readout(); drawAnnots(); renderVisible();
+    }
+    function relayout(anchor) {
+      if (!state.pages.length) return;
+      const keep = E.viewer.scrollHeight ? E.viewer.scrollTop / E.viewer.scrollHeight : 0;
+      state.pages.forEach(p => {
+        p.gen++;                                   // invalida i disegni ancora in corso
+        if (p.task) { try { p.task.cancel(); } catch (e) {} p.task = null; }
+        const probe = p.page.getViewport({ scale:1, rotation:p.page.rotate + state.rotation });
+        p.scale = scaleFor(probe);
+        p.viewport = p.page.getViewport({ scale:p.scale, rotation:p.page.rotate + state.rotation });
+        p.wPx = p.viewport.width; p.hPx = p.viewport.height;
+        p.wrap.style.width = Math.round(p.wPx) + 'px';
+        p.wrap.style.height = Math.round(p.hPx) + 'px';
+        if (p.canvas) { p.canvas.remove(); p.canvas = null; }
+        p.rendered = false; p.sk.style.display = '';
+      });
+      E.viewer.scrollTop = anchor ? Math.max(0, anchor.ratio * E.viewer.scrollHeight - anchor.off) : keep * E.viewer.scrollHeight;
+      readout(); drawAnnots(); renderVisible();
+    }
+    async function renderPage(p) {
+      if (p.rendered || p.task) return;
+      const gen = ++p.gen;                          // questo disegno vale solo per questa generazione
+      const vp = p.viewport;
+      let dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const px = vp.width * vp.height * dpr * dpr;
+      if (px > MAX_CANVAS_PX) dpr = Math.max(1, dpr * Math.sqrt(MAX_CANVAS_PX / px));
+      const cv = document.createElement('canvas');
+      cv.width = Math.round(vp.width*dpr); cv.height = Math.round(vp.height*dpr);
+      cv.style.width = Math.round(vp.width)+'px'; cv.style.height = Math.round(vp.height)+'px';
+      const ctx = cv.getContext('2d', { alpha:false });
+      if (!ctx) { p.rendered = true; p.sk.style.display = 'none'; return; }
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+      if (p.canvas) { p.canvas.remove(); p.canvas = null; }   // via i resti del vecchio zoom
+      p.wrap.insertBefore(cv, p.sk);
+      p.canvas = cv;
+      const AM = pdfjsLib.AnnotationMode || {};
+      const ro = { canvasContext:ctx, viewport:vp };
+      if (state.hideMode === 'storage') ro.annotationMode = AM.ENABLE_STORAGE !== undefined ? AM.ENABLE_STORAGE : 3;
+      else if (state.hideMode === 'all') ro.annotationMode = AM.DISABLE !== undefined ? AM.DISABLE : 0;
+      const task = p.page.render(ro);
+      p.task = task;
+      try {
+        await task.promise;
+        if (p.gen !== gen) { cv.remove(); if (p.canvas === cv) p.canvas = null; return; }
+        p.rendered = true; p.sk.style.display = 'none'; cv.classList.add('in');
+      } catch (e) {
+        cv.remove();
+        if (p.canvas === cv) p.canvas = null;
+        if (p.gen === gen) p.rendered = false;
+      } finally { if (p.task === task) p.task = null; }
+    }
+    function renderVisible() {
+      if (!state.pages.length) return;
+      const vr = E.viewer.getBoundingClientRect(), m = 340;
+      state.pages.forEach(p => {
+        const r = p.wrap.getBoundingClientRect();
+        const d = r.bottom < vr.top ? vr.top - r.bottom : r.top > vr.bottom ? r.top - vr.bottom : 0;
+        p._d = d;
+        if (d <= m) renderPage(p);
+      });
+      const on = state.pages.filter(p => p.rendered);
+      if (on.length > KEEP_RENDERED) {
+        on.sort((a,b) => b._d - a._d).slice(0, on.length - KEEP_RENDERED).forEach(p => {
+          if (!p._d) return;
+          p.gen++;
+          if (p.canvas) { p.canvas.width = 0; p.canvas.remove(); p.canvas = null; }
+          p.rendered = false; p.sk.style.display = '';
+        });
+      }
+      readout();
+    }
+    function currentPage() {
+      const vr = E.viewer.getBoundingClientRect();
+      let cur = 0, best = -Infinity;
+      state.pages.forEach((p,i) => {
+        const r = p.wrap.getBoundingClientRect();
+        const vis = Math.min(r.bottom, vr.bottom) - Math.max(r.top, vr.top);
+        if (vis > best) { best = vis; cur = i; }
+      });
+      return cur;
+    }
+    function readout() {
+      if (!state.pages.length) { E.pgVal.value = ''; E.pgTot.textContent = '/0'; E.zVal.value = ''; return; }
+      if (document.activeElement !== E.pgVal) E.pgVal.value = currentPage() + 1;
+      E.pgTot.textContent = '/' + state.pages.length;
+      if (document.activeElement !== E.zVal) E.zVal.value = Math.round(state.pages[0].scale * 100);
+      E.zFit.classList.toggle('on', state.zoomMode === 'fit');
+    }
+    let sRaf = null;
+    E.viewer.addEventListener('scroll', () => { if (sRaf) return; sRaf = requestAnimationFrame(() => { sRaf = null; renderVisible(); }); }, { passive:true });
+    let rlT = null;
+    const relayoutSoon = a => { clearTimeout(rlT); rlT = setTimeout(() => relayout(a), 80); };
+
+    function setZoom(v, anchor) {
+      state.zoom = Math.max(.2, Math.min(6, v));
+      state.zoomMode = 'custom'; localStorage.setItem(LS.zoom, 'custom');
+      relayoutSoon(anchor);
+    }
+    const zoomBy = (f, a) => setZoom((state.zoomMode === 'custom' ? state.zoom
+                                     : (state.pages.length ? state.pages[0].scale : 1)) * (1+f), a);
+    E.zIn.addEventListener('click', () => zoomBy(.15));
+    E.zOut.addEventListener('click', () => zoomBy(-.15));
+    E.zFit.addEventListener('click', () => { state.zoomMode = 'fit'; localStorage.setItem(LS.zoom,'fit'); relayout(); });
+    function applyZoomInput() {
+      const v = parseFloat(String(E.zVal.value).replace(',','.').replace('%',''));
+      if (!Number.isFinite(v) || v <= 0) { readout(); return; }
+      setZoom(Math.max(20, Math.min(600, v)) / 100);
+    }
+    E.zVal.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); applyZoomInput(); E.zVal.blur(); } });
+    E.zVal.addEventListener('blur', applyZoomInput);
+    E.zVal.addEventListener('focus', () => E.zVal.select());
+    // il numero di pagina si scrive come lo zoom: al fuoco il valore e tutto selezionato
+    function applyPageInput() {
+      const v = parseInt(String(E.pgVal.value).replace(/\D/g, ''), 10);
+      if (!Number.isFinite(v) || !state.pages.length) { readout(); return; }
+      const i = Math.max(0, Math.min(v - 1, state.pages.length - 1));
+      E.viewer.scrollTo({ top: state.pages[i].wrap.offsetTop - 16, behavior:'smooth' });
+      readout();
+    }
+    E.pgVal.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); applyPageInput(); E.pgVal.blur(); } });
+    E.pgVal.addEventListener('blur', applyPageInput);
+    E.pgVal.addEventListener('focus', () => E.pgVal.select());
+    E.viewer.addEventListener('wheel', e => {
+      if (!e.ctrlKey && !e.metaKey || !state.doc) return;
+      e.preventDefault();
+      const r = E.viewer.getBoundingClientRect(), off = e.clientY - r.top;
+      const ratio = E.viewer.scrollHeight ? (E.viewer.scrollTop + off) / E.viewer.scrollHeight : 0;
+      zoomBy(e.deltaY > 0 ? -.12 : .12, { ratio, off });
+    }, { passive:false });
+
+    function goPage(d) {
+      if (!state.pages.length) return;
+      const i = Math.max(0, Math.min(currentPage() + d, state.pages.length - 1));
+      E.viewer.scrollTo({ top: state.pages[i].wrap.offsetTop - 16, behavior:'smooth' });
+    }
+    E.pgUp.addEventListener('click', () => goPage(-1));
+    E.pgDn.addEventListener('click', () => goPage(1));
+
+    function rotateView(d) {
+      if (!state.doc) return;
+      state.rotation = (state.rotation + d*90 + 360) % 360;
+      relayout();
+    }
+    E.rotL.addEventListener('click', () => rotateView(-1));
+    E.rotR.addEventListener('click', () => rotateView(1));
+    window.addEventListener('resize', () => {
+      if (state.zoomMode === 'fit' && state.doc) relayoutSoon();
+      if (tour.on) placeTour();
+    });
+
+    /* ---------- annotazioni ---------- */
+    const byId = id => state.annots.find(b => b.id === id) || null;
+    const cur = () => byId(state.sel);
+
+    function drawAnnots() {
+      state.pages.forEach(p => { p.ov.textContent = ''; });
+      state.annots.forEach(b => { b.pi = Math.max(0, Math.min(b.pi, state.pages.length-1)); makeEl(b); });
+      markSel(); countBadge();
+    }
+    function countBadge() {
+      const n = state.annots.length, b = cur();
+      E.anCount.textContent = b ? 'pagina ' + (b.pi+1) + ' \u00B7 ' + n + ' in tutto' : (n ? n + (n === 1 ? ' annotazione' : ' annotazioni') : '\u2014');
+    }
+    function place(el, b) {
+      const p = state.pages[b.pi]; if (!p) return;
+      const pt = p.viewport.convertToViewportPoint(p.view[0] + b.xPt, p.view[3] - b.yPt);
+      el.style.left = pt[0] + 'px'; el.style.top = pt[1] + 'px';
+      el.style.transform = p.viewport.rotation ? 'rotate(' + p.viewport.rotation + 'deg)' : '';
+      const f = b.fPt || FONT_PT;
+      el.style.fontSize = (f*p.scale) + 'px';
+      el.style.padding = (PY*p.scale) + 'px ' + (PX*p.scale) + 'px';
+      el.style.borderWidth = Math.max(1, p.scale) + 'px';
+      el.style.minWidth = b.wPt ? (b.wPt*p.scale) + 'px' : '20px';
+      el.style.minHeight = b.hPt ? (b.hPt*p.scale) + 'px' : '0';
+    }
+    function tool(label, title, fn, cls) {
+      const t = document.createElement('button');
+      t.type='button'; t.className='tl' + (cls ? ' ' + cls : ''); t.textContent=label; t.title=title;
+      t.addEventListener('pointerdown', e => e.stopPropagation());
+      t.addEventListener('click', e => { e.stopPropagation(); fn(); });
+      return t;
+    }
+    function makeEl(b, fresh) {
+      const p = state.pages[b.pi]; if (!p) return;
+      const el = document.createElement('div');
+      el.className = 'an' + (fresh ? ' new' : ''); el.id = b.id;
+      const tools = document.createElement('div'); tools.className = 'tools';
+      if (b.mode === 'free') { const f = document.createElement('span'); f.className='tl flag'; f.textContent='FUORI FORMATO'; tools.appendChild(f); }
+      tools.append(tool('Duplica','Duplica (Ctrl+D)',() => dupBox(b.id), 'dup'),
+                   tool('Elimina','Elimina (Canc)',() => delBox(b.id), 'rm'));
+      const txt = document.createElement('span'); txt.className='tx'; txt.textContent = textOf(b);
+      el.append(tools, txt);
+      place(el, b);
+      el.addEventListener('pointerdown', e => grab(e, b, el));
+      el.addEventListener('dblclick', e => { e.preventDefault(); e.stopPropagation(); editIn(b, el); });
+      p.ov.appendChild(el);
+      if (fresh) setTimeout(() => el.classList.remove('new'), 760);
+    }
+    function refreshEl(b) {
+      const el = document.getElementById(b.id); if (!el) return;
+      const t = el.querySelector('.tx');
+      if (t && !el.classList.contains('edit')) t.textContent = textOf(b);
+      const flag = !!el.querySelector('.tl.flag');
+      if ((b.mode === 'free') !== flag) drawAnnots();
+    }
+    function markSel() {
+      document.querySelectorAll('.an').forEach(el => el.classList.toggle('sel', el.id === state.sel));
+      E.insp.classList.toggle('lock', !state.sel);
+    }
+    let lastSel = null;
+    function pulsePanel() {
+      const host = E.struct.style.display === 'none' ? E.rawOnly : E.struct;
+      host.classList.remove('fresh');
+      void host.offsetWidth;
+      host.classList.add('fresh');
+      setTimeout(() => host.classList.remove('fresh'), 700);
+    }
+    function select(id, scroll) {
+      commitEdit();
+      const changed = id !== lastSel; lastSel = id;
+      state.sel = id; markSel(); syncPanel(); countBadge();
+      if (id && changed) pulsePanel();
+      if (id && scroll) { const el = document.getElementById(id); if (el && el.scrollIntoView) el.scrollIntoView({ block:'center', behavior:'smooth' }); }
+    }
+
+    /* ---------- trascinamento ---------- */
+    let asDir = 0, asRaf = null;
+    function autoScroll() {
+      if (asRaf) return;
+      const step = () => { if (asDir) { E.viewer.scrollTop += asDir*14; asRaf = requestAnimationFrame(step); } else asRaf = null; };
+      asRaf = requestAnimationFrame(step);
+    }
+    const stopScroll = () => { asDir = 0; if (asRaf) { cancelAnimationFrame(asRaf); asRaf = null; } };
+
+    function grab(e, b, el) {
+      if (e.button !== 0 || el.classList.contains('edit')) return;
+      e.stopPropagation();
+      if (state.sel !== b.id) select(b.id);
+      const p0 = state.pages[b.pi]; if (!p0) return;
+      const sx = e.clientX + E.viewer.scrollLeft, sy = e.clientY + E.viewer.scrollTop;
+      const rot = p0.viewport.rotation ? ' rotate(' + p0.viewport.rotation + 'deg)' : '';
+      let dx = 0, dy = 0, moving = false, raf = null;
+      const paint = () => { raf = null; el.style.transform = 'translate3d(' + dx + 'px,' + dy + 'px,0)' + rot; };
+      const move = ev => {
+        dx = (ev.clientX + E.viewer.scrollLeft) - sx;
+        dy = (ev.clientY + E.viewer.scrollTop) - sy;
+        if (!moving) {
+          if (Math.abs(dx) < 3 && Math.abs(dy) < 3) return;
+          moving = true; push();
+          el.classList.add('drag'); el.style.willChange = 'transform';
+          p0.wrap.classList.add('dragsrc');
+        }
+        if (ev.shiftKey) { if (Math.abs(dx) > Math.abs(dy)) dy = 0; else dx = 0; }
+        if (!raf) raf = requestAnimationFrame(paint);
+        const vr = E.viewer.getBoundingClientRect();
+        asDir = ev.clientY < vr.top + 44 ? -1 : ev.clientY > vr.bottom - 44 ? 1 : 0;
+        if (asDir) autoScroll(); else stopScroll();
+      };
+      const up = () => {
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+        window.removeEventListener('pointercancel', up);
+        stopScroll();
+        try { el.releasePointerCapture(e.pointerId); } catch (err) {}
+        if (raf) { cancelAnimationFrame(raf); paint(); }
+        if (!moving) return;
+        el.classList.remove('drag'); el.style.willChange = '';
+        p0.wrap.classList.remove('dragsrc');
+        const ox = p0.wrap.offsetLeft + parseFloat(el.style.left) + dx;
+        const oy = p0.wrap.offsetTop + parseFloat(el.style.top) + dy;
+        const r = el.getBoundingClientRect(), cx = r.left + r.width/2, cy = r.top + r.height/2;
+        let idx = b.pi, best = Infinity;
+        state.pages.forEach((p,i) => {
+          const q = p.wrap.getBoundingClientRect();
+          const inside = cx >= q.left && cx <= q.right && cy >= q.top && cy <= q.bottom;
+          const d = inside ? -1 : Math.abs(cy - (q.top + q.height/2));
+          if (d < best) { best = d; idx = i; }
+        });
+        const p = state.pages[idx];
+        if (idx !== b.pi) p.ov.appendChild(el);
+        const pdf = p.viewport.convertToPdfPoint(ox - p.wrap.offsetLeft, oy - p.wrap.offsetTop);
+        const wPt = el.offsetWidth/p.scale, hPt = el.offsetHeight/p.scale;
+        b.pi = idx;
+        b.xPt = Math.max(0, Math.min(pdf[0] - p.view[0], p.wVPt - wPt));
+        b.yPt = Math.max(0, Math.min(p.view[3] - pdf[1], p.hVPt - hPt));
+        place(el, b); touch(b); setDirty(true); countBadge();
+        el.classList.remove('settle'); void el.offsetWidth; el.classList.add('settle');
+        setTimeout(() => el.classList.remove('settle'), 380);
+      };
+      try { el.setPointerCapture(e.pointerId); } catch (err) {}
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+      window.addEventListener('pointercancel', up);
+    }
+
+    /* ---------- modifica sul box ---------- */
+    let editing = null;
+    function editIn(b, el) {
+      commitEdit();
+      editing = b.id; el.classList.add('edit');
+      const t = el.querySelector('.tx');
+      t.contentEditable = 'true'; t.spellcheck = false; t.focus();
+      const rg = document.createRange(); rg.selectNodeContents(t);
+      const sl = window.getSelection(); sl.removeAllRanges(); sl.addRange(rg);
+      t.addEventListener('keydown', function k(ev) {
+        ev.stopPropagation();
+        if (ev.key === 'Escape') { ev.preventDefault(); t.removeEventListener('keydown', k); editing = null; t.contentEditable='false'; el.classList.remove('edit'); t.textContent = textOf(b); }
+        else if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); t.removeEventListener('keydown', k); commitEdit(); }
+      });
+      t.addEventListener('blur', () => commitEdit(), { once:true });
+    }
+    function commitEdit() {
+      if (!editing) return;
+      const b = byId(editing), el = document.getElementById(editing);
+      editing = null; if (!b || !el) return;
+      const t = el.querySelector('.tx');
+      t.contentEditable = 'false'; el.classList.remove('edit');
+      const next = norm(t.innerText || '').replace(/\n$/, '');
+      if (next === textOf(b)) { t.textContent = textOf(b); return; }
+      push();
+      const p = parseText(next);
+      if (p.tpl) { b.mode='structured'; Object.assign(b, p.f); b.aVia=false; b.aCap=false; }
+      else { b.mode='free'; b.raw = next; }
+      touch(b); drawAnnots(); syncPanel(); setDirty(true);
+    }
+
+    /* ---------- creazione volontaria ---------- */
+    function setPlacing(on) {
+      state.placing = on;
+      E.viewer.classList.toggle('placing', on);
+      E.hint.classList.toggle('on', on);
+      E.add.classList.toggle('on', on);
+    }
+    E.add.addEventListener('click', e => { e.stopPropagation(); setPlacing(!state.placing); });
+
+    function addAt(pi, xPt, yPt) {
+      push();
+      const b = mkBox({ pi, xPt, yPt, touched:true });
+      state.annots.push(b);
+      makeEl(b, true); markSel(); select(b.id);
+      setDirty(true); E.rete.focus();
+      return b;
+    }
+    function pointOnPage(ev, wrap) {
+      const p = state.pages[+wrap.dataset.pi];
+      const r = wrap.getBoundingClientRect();
+      const pdf = p.viewport.convertToPdfPoint(ev.clientX - r.left, ev.clientY - r.top);
+      return { pi:+wrap.dataset.pi, xPt:Math.max(0, pdf[0] - p.view[0]), yPt:Math.max(0, p.view[3] - pdf[1]) };
+    }
+    function onDblPage(ev, pi) {
+      if (ev.target.closest('.an')) return;
+      const wrap = state.pages[pi] && state.pages[pi].wrap; if (!wrap) return;
+      const q = pointOnPage(ev, wrap);
+      addAt(q.pi, q.xPt, q.yPt);
+      setPlacing(false);
+    }
+    function dupBox(id) {
+      const s = byId(id || state.sel); if (!s) return;
+      push();
+      const c = mkBox(Object.assign({}, s, { id:uid(), xPt:s.xPt+12, yPt:s.yPt+12, cd:'', md:'', touched:true }));
+      state.annots.push(c); drawAnnots(); select(c.id); setDirty(true);
+    }
+    function delBox(id) {
+      const i = state.annots.findIndex(b => b.id === id); if (i === -1) return;
+      const el = document.getElementById(id);
+      const finish = () => {
+        const j = state.annots.findIndex(b => b.id === id); if (j === -1) return;
+        push();
+        state.annots.splice(j,1);
+        const n = state.annots[Math.min(j, state.annots.length-1)];
+        drawAnnots(); select(n ? n.id : null); setDirty(true);
+      };
+      if (el) { el.classList.add('gone'); setTimeout(finish, 460); }   // sparisce, poi se ne va davvero
+      else finish();
+    }
+    E.viewer.addEventListener('click', e => {
+      const wrap = e.target.closest('.pg');
+      if (state.placing && wrap) { const q = pointOnPage(e, wrap); addAt(q.pi, q.xPt, q.yPt); setPlacing(false); return; }
+      if (!e.target.closest('.an') && state.sel) select(null);
+    });
+
+    let nudgeAt = 0;
+    function nudge(dx, dy) {
+      const b = cur(); if (!b) return;
+      const p = state.pages[b.pi]; if (!p) return;
+      const now = Date.now(); if (now - nudgeAt > 700) push(); nudgeAt = now;
+      const el = document.getElementById(b.id);
+      const w = el ? el.offsetWidth/p.scale : 0, h = el ? el.offsetHeight/p.scale : 0;
+      b.xPt = Math.max(0, Math.min(b.xPt+dx, p.wVPt - w));
+      b.yPt = Math.max(0, Math.min(b.yPt+dy, p.hVPt - h));
+      if (el) place(el, b);
+      touch(b); setDirty(true);
+    }
+
+    /* ---------- coordinate ---------- */
+    const CH = { eMin:2450000, eMax:2900000, nMin:1050000, nMax:1320000 };
+    // tutto ciò che segue il primo "." viene tagliato: nei rilievi i decimali non servono
+    const cut = v => { const s = String(v == null ? '' : v); const i = s.indexOf('.'); return i === -1 ? s : s.slice(0, i); };
+    function num(v) {
+      let s = cut(v).trim().replace(/[\u2019'\u00A0\s_]/g, '');
+      if (!s) return NaN;
+      s = s.replace(',', '.');
+      return /^-?\d+(\.\d+)?$/.test(s) ? parseFloat(s) : NaN;
+    }
+    function lv95(a, b) {
+      if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+      for (const [p,q,sw] of [[a,b,false],[b,a,true]]) {
+        const ch03 = p < 2000000 || q < 1000000;
+        const e = p < 2000000 ? p + 2000000 : p, n = q < 1000000 ? q + 1000000 : q;
+        if (e >= CH.eMin && e <= CH.eMax && n >= CH.nMin && n <= CH.nMax) return { e, n, ch03, sw };
+      }
+      return null;
+    }
+    function toWgs(Ee, Nn) {
+      const y = (Ee-2600000)/1e6, x = (Nn-1200000)/1e6;
+      const lng = 2.6779094 + 4.728982*y + 0.791484*y*x + 0.1306*y*x*x - 0.0436*y*y*y;
+      const lat = 16.9023892 + 3.238272*x - 0.270978*y*y - 0.002528*x*x - 0.0447*y*y*x - 0.0140*x*x*x;
+      return [lat*100/36, lng*100/36];
+    }
+    const nfmt = v => Math.round(v).toLocaleString('de-CH').replace(/\u2019/g,'\u2009');
+    function coords() {
+      const a = num(E.x.value), b = num(E.y.value);
+      if (!E.x.value.trim() && !E.y.value.trim()) return { s:'empty' };
+      if (Number.isNaN(a) || Number.isNaN(b)) return { s:'part' };
+      const p = lv95(a,b);
+      return p ? { s:'ok', p } : { s:'out' };
+    }
+    function coordHint() {
+      const r = coords(), bad = r.s === 'out';
+      E.x.classList.toggle('bad', bad); E.y.classList.toggle('bad', bad);
+      E.coordHint.classList.toggle('bad', bad);
+      E.coordHint.textContent = bad ? 'Punto fuori dalla Svizzera' : (r.s === 'ok' && r.p.sw) ? 'E e N erano invertite, corrette' : '';
+      return r;
+    }
+    // pulizia richiesta anche quando si esce dal campo e prima di salvare
+    function cleanCoordFields() {
+      let changed = false;
+      [E.x, E.y].forEach(f => { const c = cut(f.value); if (c !== f.value) { f.value = c; changed = true; } });
+      if (changed) { commit(); coordHint(); }
+      return changed;
+    }
+
+    /* ---------- indirizzo ---------- */
+    const GEO = ['https://api3.geo.admin.ch/rest/services/ech/MapServer/identify',
+                 'https://api3.geo.admin.ch/rest/services/api/MapServer/identify'];
+    const L_ADDR = 'ch.swisstopo.amtliches-gebaeudeadressverzeichnis';
+    const L_GWR = 'ch.bfs.gebaeude_wohnungs_register';
+    const L_LOC = 'ch.swisstopo-vd.ortschaftenverzeichnis_plz';
+    const L_COM = 'ch.swisstopo.swissboundaries3d-gemeinde-flaeche.fill';
+    const gcache = new Map();
+    let gabort = null;
+
+    async function identify(layer, e, n, rad, sig, geom) {
+      const q = new URLSearchParams({
+        geometryType:'esriGeometryPoint', geometry:e.toFixed(2)+','+n.toFixed(2), sr:'2056', lang:'it',
+        layers:'all:'+layer, returnGeometry: geom ? 'true':'false', tolerance:String(Math.round(rad)),
+        mapExtent: rad>0 ? '0,0,100,100':'0,0,0,0', imageDisplay: rad>0 ? '100,100,100':'0,0,0', limit:'50' });
+      let last = null;
+      for (const base of GEO) {
+        try {
+          const r = await fetch(base + '?' + q, { signal:sig, headers:{ Accept:'application/json' } });
+          if (!r.ok) { last = new Error('risposta ' + r.status); continue; }
+          const d = await r.json();
+          return Array.isArray(d.results) ? d.results : [];
+        } catch (err) { if (err.name === 'AbortError') throw err; last = err; }
+      }
+      throw last || new Error('servizio non raggiungibile');
+    }
+    const attrs = r => r.attributes || r.properties || {};
+    function pick(o, ks) { for (const k of ks) { const v = o[k]; if (v != null && String(v).trim() !== '') return String(v).trim(); } return ''; }
+    function dist(f, e, n) {
+      const g = f.geometry; if (!g) return Infinity;
+      if (typeof g.x === 'number') return Math.hypot(g.x-e, g.y-n);
+      const gs = g.rings || g.paths;
+      if (Array.isArray(gs)) { let b = Infinity; for (const q of gs) for (const p of q) { const d = Math.hypot(p[0]-e, p[1]-n); if (d<b) b=d; } return b; }
+      return Infinity;
+    }
+    const gpt = f => (f.geometry && typeof f.geometry.x === 'number') ? { e:f.geometry.x, n:f.geometry.y } : null;
+    function fromAddr(rs, e, n) {
+      return rs.map(r => {
+        const a = attrs(r), st = pick(a,['stn_label','str_label']), no = pick(a,['adr_number']);
+        const zip = pick(a,['zip_label']), stt = pick(a,['adr_status']).toLowerCase();
+        if (!st && !zip) return null;
+        return { via:(st + (no ? ' '+no : '')).trim(), cap:zip, d:dist(r,e,n), pt:gpt(r), pen: stt==='outdated'?250:stt==='planned'?60:0 };
+      }).filter(Boolean);
+    }
+    function fromGwr(rs, e, n) {
+      return rs.map(r => {
+        const a = attrs(r), via = pick(a,['strname_deinr']), p6 = pick(a,['plz_plz6']);
+        const zip = p6 ? p6.split('/')[0].trim() : pick(a,['dplz4']), city = pick(a,['dplzname','ggdename']);
+        if (!via && !zip) return null;
+        return { via, cap:[zip,city].filter(Boolean).join(' '), d:dist(r,e,n), pt:gpt(r), pen:0 };
+      }).filter(Boolean);
+    }
+    async function locality(e, n, sig) {
+      try {
+        const r = await identify(L_LOC, e, n, 0, sig, false);
+        if (r.length) {
+          const a = attrs(r[0]), plz = pick(a,['plz','zip']), nm = pick(a,['ortschaftsname','langtext','label','name']);
+          if (/^\d{4}\s/.test(nm)) return { cap:nm };
+          if (plz || nm) return { cap:[plz,nm].filter(Boolean).join(' ').trim() };
+        }
+      } catch (err) { if (err.name === 'AbortError') throw err; }
+      try {
+        const r = await identify(L_COM, e, n, 0, sig, false);
+        if (r.length) { const nm = pick(attrs(r[0]), ['gemname','name','label']); if (nm) return { cap:nm }; }
+      } catch (err) { if (err.name === 'AbortError') throw err; }
+      return null;
+    }
+    // Il cerchio si allarga finché non incontra un indirizzo: in Svizzera
+    // entro 2.6 km si trova sempre qualcosa, così la linea c'è sempre.
+    const RADII = [30, 75, 160, 320, 650, 1300, 2600, 5000, 9000];
+    const WANT_ADDR = 3;   // quanti indirizzi vicini servono per la scelta
+    async function geocode(e, n, sig, onRadius) {
+      const k = Math.round(e)+':'+Math.round(n);
+      if (gcache.has(k)) return gcache.get(k);
+      // Si continua ad allargare finche non si hanno almeno tre indirizzi
+      // distinti: nei posti isolati il primo raggio ne trova uno solo.
+      const seen = new Set(), uq = [];
+      const absorb = cands => {
+        cands.forEach(c => { const k = c.via + '|' + c.cap; if (!seen.has(k)) { seen.add(k); uq.push(c); } });
+        uq.sort((a,b) => (a.d+a.pen)-(b.d+b.pen));
+      };
+      let rad = 0;
+      for (const r of RADII) {
+        if (onRadius) onRadius(r);
+        rad = r;
+        absorb(fromAddr(await identify(L_ADDR,e,n,r,sig,true), e, n));
+        if (uq.length >= WANT_ADDR) break;
+      }
+      if (!uq.length) for (const r of RADII) {
+        if (onRadius) onRadius(r);
+        rad = r;
+        absorb(fromGwr(await identify(L_GWR,e,n,r,sig,true), e, n));
+        if (uq.length >= WANT_ADDR) break;
+      }
+      const loc = await locality(e, n, sig);
+      const out = { best:uq[0]||null, alt:uq.slice(1,4), top:uq.slice(0,WANT_ADDR), loc, rad, e, n };
+      gcache.set(k, out);
+      return out;
+    }
+    const capOf = r => (r.best && /^\d{4}\s+\S/.test(r.best.cap||'')) ? r.best.cap : (r.loc && r.loc.cap) || (r.best && r.best.cap) || '';
+
+    /* ============================================================
+       MAPPA
+       Sequenza fissa, una tappa dopo l'altra:
+       1. si cancella tutto il disegnato (cerchi, linee, punti)
+       2. compare il punto delle coordinate
+       3. volo sulla posizione, si aspetta la fine
+       4. il cerchio parte da raggio 0 e cresce fino alla distanza calcolata
+       5. la linea corre dalle coordinate all'indirizzo
+       6. compare il marker dell'indirizzo
+       ============================================================ */
+    const MAP_PALETTE = {
+      light: { halo:'#ffffff', ring:'#0a58ff', point:'#c8102e', line:'#0a58ff' },
+      dark:  { halo:'#04121c', ring:'#3ddcff', point:'#ff5468', line:'#7fb0ff' }
+    };
+    const mapColors = () => MAP_PALETTE[document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'];
+
+    let drawn = [], tweens = [], playToken = 0, lastGeo = null, curRadius = 0, curThere = null;
+    const nowMs = () => (window.performance && performance.now) ? performance.now() : Date.now();
+    function tween(ms, step, done) {
+      const t0 = nowMs(), h = { stop:false };
+      tweens.push(h);
+      return new Promise(res => {
+        const frame = () => {
+          if (h.stop) return res();
+          const k = Math.min(1, (nowMs() - t0) / ms);
+          step(k < .5 ? 4*k*k*k : 1 - Math.pow(-2*k + 2, 3) / 2);   // dolce in entrata e in uscita
+          if (k < 1) requestAnimationFrame(frame); else { if (done) done(); res(); }
+        };
+        requestAnimationFrame(frame);
+      });
+    }
+    const stopTweens = () => { tweens.forEach(t => t.stop = true); tweens = []; };
+
+    function ensureMap() {
+      if (map || typeof L === 'undefined' || !L.map) return map;
+      try {
+        map = L.map(E.mapEl, { zoomControl:false, attributionControl:false, scrollWheelZoom:true, dragging:true,
+                               maxZoom:22, zoomSnap:.25, fadeAnimation:true, zoomAnimation:true });
+        map.setView([46.8,8.2], 8);
+        L.tileLayer('https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.swissimage/default/current/3857/{z}/{x}/{y}.jpeg',
+          { maxZoom:22, maxNativeZoom:19, keepBuffer:3 }).addTo(map);
+        mWms = L.tileLayer.wms('https://wms.geo.admin.ch/', { layers:L_GWR+','+L_ADDR, format:'image/png',
+          transparent:true, version:'1.3.0', maxZoom:22, opacity:.95 });
+        try {
+          const syncWms = () => {
+            const near = map.getZoom() >= 15;
+            if (near && !map.hasLayer(mWms)) map.addLayer(mWms);
+            else if (!near && map.hasLayer(mWms)) map.removeLayer(mWms);
+          };
+          map.on('zoomend', syncWms);
+          syncWms();
+        } catch (e) { try { mWms.addTo(map); } catch (e2) {} }
+        if (typeof ResizeObserver !== 'undefined') {
+          let t = null;
+          new ResizeObserver(() => { clearTimeout(t); t = setTimeout(() => { if (map) map.invalidateSize({ animate:false }); }, 120); }).observe(E.mapEl);
+        }
+      } catch (err) { map = null; E.mapFb.textContent = 'Mappa non disponibile.'; }
+      return map;
+    }
+
+    // toglie solo cio che disegniamo noi: sfondo e layer restano
+    function clearDrawn() {
+      stopTweens();
+      drawn.forEach(l => { try { map.removeLayer(l); } catch (e) {} });
+      drawn = [];
+      mHere = mHalo = mRing = mAddr = mLine = mLineCase = null;
+      curRadius = 0; curThere = null;
+    }
+    const keep = l => { drawn.push(l); return l; };
+
+    function waitFly(m, here, there, dist) {
+      return new Promise(res => {
+        let done = false;
+        const finish = () => { if (done) return; done = true; try { m.off('moveend', finish); } catch (e) {} res(); };
+        try { m.once('moveend', finish); } catch (e) {}
+        setTimeout(finish, 1700);
+        try {
+          m.invalidateSize({ animate:false });
+          const size = m.getSize ? m.getSize() : { x:300, y:200 };
+          if (!size || size.x < 40) { finish(); return; }
+          let b = L.latLng(here).toBounds(Math.max(dist * 2.8, 90));
+          if (there) b = b.extend(L.latLng(there).toBounds(70));
+          // uno scatto di zoom piu vicino di quanto basterebbe a inquadrare
+          const fit = m.getBoundsZoom ? m.getBoundsZoom(b, false, [20,20]) : 17;
+          const z = Math.min(20, Math.max(1, fit || 17));
+          m.flyTo(b.getCenter ? b.getCenter() : here, z, { duration:.9, easeLinearity:.25 });
+        } catch (e) { try { m.setView(here, 18); } catch (e2) {} finish(); }
+      });
+    }
+
+    async function playMap(point, cand) {
+      const m = ensureMap();
+      if (!m) { E.mapFb.style.display = 'flex'; return; }
+      E.mapFb.style.display = 'none';
+      const token = ++playToken;
+      const c = mapColors();
+      const here = toWgs(point.e, point.n);
+      const there = (cand && cand.pt) ? toWgs(cand.pt.e, cand.pt.n) : null;
+      const dist = Math.max(1, cand ? cand.d : 30);   // fino all'indirizzo scelto, non oltre
+
+      clearDrawn();
+
+      // 2. il punto delle coordinate
+      mHere = keep(L.circleMarker(here, { radius:0, weight:0, fillColor:c.point, fillOpacity:1, className:'ar-here' }).addTo(m));
+      mHere.bindTooltip(nfmt(point.e) + ' / ' + nfmt(point.n) + '<br>CH03 ' + nfmt(point.e - 2000000) + ' / ' + nfmt(point.n - 1000000),
+        { direction:'top', offset:[0,-8], className:'addr' });
+      await tween(240, k => { if (token === playToken) mHere.setRadius(5 * k); });
+      if (token !== playToken) return;
+
+      // 3. volo, e si aspetta che finisca
+      await waitFly(m, here, there, dist);
+      if (token !== playToken) return;
+
+      // 4. il cerchio cresce da 0 alla distanza calcolata
+      mRing = keep(L.circle(here, { radius:0, color:c.ring, weight:0.7, opacity:1, dashArray:'5 4',
+                                    fillColor:c.ring, fillOpacity:.1, className:'ar-ring', interactive:false }).addTo(m));
+      await tween(700, k => { if (token !== playToken) return; mRing.setRadius(dist * k); });
+      curRadius = dist;
+      if (token !== playToken || !there) return;
+
+      // 5. la linea corre verso l'indirizzo
+      mLine = keep(L.polyline([here, here], { color:c.line, weight:1.1, dashArray:'5 4', className:'ar-beam' }).addTo(m));
+      mLine.bindTooltip(Math.round(cand.d) + ' m dal punto', { direction:'top', offset:[0,-8], className:'addr', sticky:true });
+      await tween(550, k => {
+        if (token !== playToken) return;
+        const q = [here[0] + (there[0]-here[0])*k, here[1] + (there[1]-here[1])*k];
+        mLine.setLatLngs([here, q]);
+      });
+      curThere = there;
+      if (token !== playToken) return;
+
+      // 6. il marker dell'indirizzo
+      mAddr = keep(L.circleMarker(there, { radius:0, weight:0, fillColor:c.line, fillOpacity:1, className:'ar-addr' }).addTo(m));
+      mAddr.bindTooltip(cand.via + (cand.cap ? '<br>' + cand.cap : ''), { direction:'top', offset:[0,-8], className:'addr' });
+      await tween(260, k => { if (token === playToken) mAddr.setRadius(5 * k); });
+    }
+
+    function restyleMap() {
+      if (!drawn.length) return;
+      const c = mapColors();
+      if (mRing) mRing.setStyle({ color:c.ring, fillColor:c.ring });
+      if (mLine) mLine.setStyle({ color:c.line });
+      if (mAddr) mAddr.setStyle({ fillColor:c.line });
+      if (mHere) mHere.setStyle({ fillColor:c.point });
+    }
+
+    const setStat = (k, html) => { E.led.className = 'led ' + (k || ''); E.statTxt.innerHTML = html; };
+    const ORD = ['Il pi\u00F9 vicino', '2\u00BA pi\u00F9 vicino', '3\u00BA pi\u00F9 vicino'];
+
+    function renderPicks(box, list) {
+      E.picks.textContent = '';
+      if (!list || list.length < 2) return;
+      list.forEach((cand, i) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'pick' + (i === (box.pick || 0) ? ' on' : '');
+        b.title = cand.via + (cand.cap ? ' \u2014 ' + cand.cap : '');
+        const o = document.createElement('span'); o.className = 'o'; o.textContent = ORD[i] + ' \u00B7 ' + Math.round(cand.d) + ' m';
+        const v = document.createElement('span'); v.className = 'v'; v.textContent = cand.via;
+        b.append(o, v);
+        b.addEventListener('click', () => choosePick(i));
+        E.picks.appendChild(b);
+      });
+    }
+
+    async function retarget(cand) {
+      const m = map;
+      if (!m || !mRing || !mLine || !mAddr || !lastGeo) { playMap(lastGeo && lastGeo.point, cand); return; }
+      const token = ++playToken;
+      stopTweens();
+      const here = toWgs(lastGeo.point.e, lastGeo.point.n);
+      const there = (cand && cand.pt) ? toWgs(cand.pt.e, cand.pt.n) : null;
+      const r0 = curRadius, r1 = Math.max(1, cand ? cand.d : 30);
+      const p0 = curThere || here;
+      mAddr.bindTooltip(cand.via + (cand.cap ? '<br>' + cand.cap : ''), { direction:'top', offset:[0,-8], className:'addr' });
+      mLine.bindTooltip(Math.round(cand.d) + ' m dal punto', { direction:'top', offset:[0,-8], className:'addr', sticky:true });
+      await tween(620, k => {
+        if (token !== playToken) return;
+        mRing.setRadius(r0 + (r1 - r0) * k);           // cresce o si restringe
+        if (there) {
+          const q = [p0[0] + (there[0]-p0[0])*k, p0[1] + (there[1]-p0[1])*k];
+          mLine.setLatLngs([here, q]);
+          mAddr.setLatLng(q);
+        }
+      });
+      if (token !== playToken) return;
+      curRadius = r1; curThere = there;
+      // se il nuovo indirizzo e finito fuori vista, si riquadra con calma
+      try {
+        if (there && m.getBounds && !m.getBounds().contains(there)) {
+          let b = L.latLng(here).toBounds(Math.max(r1 * 2.6, 80));
+          b = b.extend(L.latLng(there).toBounds(60));
+          const fit = m.getBoundsZoom ? m.getBoundsZoom(b, false, [20,20]) : 17;
+          m.flyTo(b.getCenter ? b.getCenter() : here, Math.min(20, Math.max(1, fit || 17)), { duration:.7 });
+        }
+      } catch (e) {}
+    }
+
+    function choosePick(i) {
+      const box = cur();
+      if (!box || !lastGeo || !lastGeo.top[i]) return;
+      box.pick = i;
+      const cand = lastGeo.top[i];
+      const cap = /^\d{4}\s+\S/.test(cand.cap || '') ? cand.cap : capOf(lastGeo);
+      syncing = true;
+      box.via = cand.via; box.aVia = true; E.via.value = cand.via;
+      if (cap) { box.cap = cap; box.aCap = true; E.cap.value = cap; }
+      E.viaSrc.className = 'src auto'; E.capSrc.className = 'src auto';
+      syncing = false;
+      touch(box); refreshEl(box); setDirty(true);
+      setStat('ok', '<b>' + cand.via + '</b> a ' + (cand.d < 1 ? '<1' : Math.round(cand.d)) + ' m');
+      renderPicks(box, lastGeo.top);
+      retarget(cand);
+    }
+
+    let gTimer = null;
+    const geoSoon = () => { clearTimeout(gTimer); gTimer = setTimeout(() => runGeo(false), 600); };
+
+    async function runGeo(manual) {
+      clearTimeout(gTimer);
+      const b = cur(); if (!b || b.mode !== 'structured') return;
+      const r = coordHint();
+      if (r.s !== 'ok') {
+        setStat('', r.s === 'out' ? 'Coordinate non valide' : 'In attesa delle coordinate');
+        E.picks.textContent = '';
+        E.mapFb.textContent = r.s === 'out' ? 'Coordinate fuori dalla Svizzera.' : 'La mappa appare con le coordinate.';
+        E.mapFb.style.display = 'flex';
+        return;
+      }
+      if (gabort) gabort.abort();
+      gabort = new AbortController();
+      const c = gabort, t = setTimeout(() => c.abort(), 20000);
+      setGeoBusy(true);
+      setStat('busy', 'Cerco vicino a <b>' + nfmt(r.p.e) + ' / ' + nfmt(r.p.n) + '</b>');
+      try {
+        // prima si trova, poi si anima: la sequenza parte a distanza nota
+        const res = await geocode(r.p.e, r.p.n, c.signal);
+        clearTimeout(t);
+        if (c !== gabort || cur() !== b) return;
+        useGeo(b, res, r.p, manual);
+      } catch (err) {
+        clearTimeout(t);
+        if (err.name === 'AbortError') return;
+        setStat('err', 'swisstopo non risponde \u2014 scrivi a mano');
+      } finally { if (c === gabort) setGeoBusy(false); }
+    }
+
+    function useGeo(b, res, p, manual) {
+      lastGeo = { point:p, top:res.top || [], full:res };
+      const idx = Math.min(b.pick || 0, Math.max(0, lastGeo.top.length - 1));
+      b.pick = idx;
+      const cand = lastGeo.top[idx] || null;
+      const cap = capOf(res), via = cand ? cand.via : '';
+      if (!via && !cap) { setStat('err', 'Nessun indirizzo trovato'); E.picks.textContent = ''; playMap(p, null); return; }
+      const d = cand ? Math.round(cand.d) : null;
+      setStat('ok', '<b>' + (via || cap) + '</b>' + (d !== null ? ' a ' + (d < 1 ? '<1' : d) + ' m' : ''));
+      renderPicks(b, lastGeo.top);
+      let ch = false;
+      if (via && (!b.via || b.aVia || manual)) { b.via = via; b.aVia = true; ch = true; }
+      if (cap && (!b.cap || b.aCap || manual)) { b.cap = cap; b.aCap = true; ch = true; }
+      if (ch) {
+        syncing = true;
+        E.via.value = b.via || ''; E.cap.value = b.cap || '';
+        E.viaSrc.className = 'src' + (b.aVia ? ' auto' : ''); E.capSrc.className = 'src' + (b.aCap ? ' auto' : '');
+        syncing = false;
+        touch(b); refreshEl(b); setDirty(true);
+      }
+      playMap(p, cand);
+    }
+    E.geoBtn.addEventListener('click', () => runGeo(true));
+
+    /* ---------- pannello ---------- */
+    let syncing = false;
+    function syncPanel() {
+      const b = cur(); syncing = true;
+      E.insp.classList.toggle('lock', !b);
+      if (!b) { E.rawOnly.style.display='none'; E.struct.style.display='none'; syncing=false; return; }
+      if (b.mode === 'free') {
+        E.rawOnly.style.display='flex'; E.struct.style.display='none';
+        E.rawText.value = b.raw || '';
+      } else {
+        E.rawOnly.style.display='none'; E.struct.style.display='flex';
+        E.rete.value=b.rete||''; E.asset.value=b.asset||''; E.gaia.value=b.gaia||'';
+        E.x.value=b.x||''; E.y.value=b.y||''; E.via.value=b.via||''; E.cap.value=b.cap||''; E.oss.value=b.oss||'';
+        E.viaSrc.className='src'+(b.aVia?' auto':''); E.viaSrc.title = b.aVia ? 'compilata da swisstopo' : 'scritta a mano';
+        E.capSrc.className='src'+(b.aCap?' auto':''); E.capSrc.title = b.aCap ? 'compilata da swisstopo' : 'scritta a mano';
+        const r = coordHint();
+        E.picks.textContent = '';
+        if (r.s === 'ok') { geoSoon(); }
+        else { E.mapFb.textContent='La mappa appare con le coordinate.'; E.mapFb.style.display='flex'; setStat('','In attesa delle coordinate'); }
+        if (map) setTimeout(() => map.invalidateSize({ animate:false }), 70);
+      }
+      syncing = false;
+    }
+    function commit() {
+      if (syncing) return;
+      const b = cur(); if (!b) return;
+      if (b.mode === 'free') {
+        b.raw = norm(E.rawText.value);
+        const p = parseText(b.raw);
+        if (p.tpl) { Object.assign(b, p.f); b.mode='structured'; drawAnnots(); syncPanel(); setDirty(true); return; }
+      } else {
+        if (E.via.value !== (b.via||'')) b.aVia = false;
+        if (E.cap.value !== (b.cap||'')) b.aCap = false;
+        b.rete=E.rete.value; b.asset=E.asset.value; b.gaia=E.gaia.value;
+        b.x=E.x.value; b.y=E.y.value; b.via=E.via.value; b.cap=E.cap.value; b.oss=oneLine(E.oss.value);
+        E.viaSrc.className='src'+(b.aVia?' auto':''); E.capSrc.className='src'+(b.aCap?' auto':'');
+      }
+      touch(b); refreshEl(b); setDirty(true);
+    }
+    let pend = null;
+    const editStart = () => { if (state.sel) pend = snap(); };
+    function flushEdit() { if (pend === null) return; state.hist.push(pend); if (state.hist.length>60) state.hist.shift(); state.fut.length=0; pend=null; }
+    const changed = () => { flushEdit(); commit(); };
+    const fields = [E.rete,E.asset,E.gaia,E.via,E.cap,E.oss,E.rawText,E.x,E.y];
+    fields.forEach(i => { i.addEventListener('focus', editStart); i.addEventListener('blur', () => { pend = null; }); });
+    [E.rete,E.asset,E.gaia,E.via,E.cap,E.oss,E.rawText].forEach(i => i.addEventListener('input', changed));
+    [E.x,E.y].forEach(i => {
+      i.addEventListener('input', () => { changed(); coordHint(); geoSoon(); });
+      i.addEventListener('blur', () => { if (cleanCoordFields()) geoSoon(); });
+    });
+    function onPaste(e, t) {
+      const txt = ((e.clipboardData || window.clipboardData).getData('text') || '').trim();
+      if (!txt) return;
+      e.preventDefault();
+      const parts = txt.split(/[\/;]|\s{2,}|,\s|\s+(?=\d)/).map(s => s.trim()).filter(Boolean);
+      if (parts.length >= 2 && !Number.isNaN(num(parts[0])) && !Number.isNaN(num(parts[1]))) { E.x.value = cut(parts[0]); E.y.value = cut(parts[1]); }
+      else t.value = cut(txt);
+      changed(); coordHint(); geoSoon();
+    }
+    E.x.addEventListener('paste', e => onPaste(e, E.x));
+    E.y.addEventListener('paste', e => onPaste(e, E.y));
+
+    /* ---------- scrittura PDF ---------- */
+    // Data E ora: sotto il nome, nel lettore PDF, compare il momento del salvataggio.
+    function pdfDate(d) {
+      const p = v => String(v).padStart(2,'0'), o = -d.getTimezoneOffset(), s = o>=0?'+':'-';
+      return 'D:'+d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+
+             p(d.getHours())+p(d.getMinutes())+p(d.getSeconds())+
+             s+p(Math.floor(Math.abs(o)/60))+"'"+p(Math.abs(o)%60)+"'";
+    }
+    function isFreeText(doc, ref) {
+      try {
+        const d = doc.context.lookup(ref);
+        if (!d || typeof d.get !== 'function') return false;
+        const s = typeof d.lookup === 'function' ? d.lookup(PDFLib.PDFName.of('Subtype')) : d.get(PDFLib.PDFName.of('Subtype'));
+        if (!s) return false;
+        const n = typeof s.asString === 'function' ? s.asString() : String(s);
+        return n === '/FreeText' || n === 'FreeText';
+      } catch (e) { return false; }
+    }
+    function appearance(doc, font, lines, w, h, fPt) {
+      const ops = ['q','1 w','0 G','0.5 0.5 '+(w-1).toFixed(2)+' '+(h-1).toFixed(2)+' re','S',
+        'BT','/Helv '+fPt+' Tf','0 g',(fPt*LINE).toFixed(2)+' TL',
+        PX.toFixed(2)+' '+(h-PY-fPt*.86).toFixed(2)+' Td'];
+      lines.forEach((l,i) => { if (i) ops.push('T*'); ops.push(font.encodeText(l)+' Tj'); });
+      ops.push('ET','Q');
+      const dict = { Type:'XObject', Subtype:'Form', FormType:1, BBox:[0,0,w,h], Resources:{ Font:{ Helv:font.ref } } };
+      const c = doc.context;
+      const st = typeof c.flateStream === 'function' ? c.flateStream(ops.join('\n'), dict) : c.stream(ops.join('\n'), dict);
+      return c.register(st);
+    }
+    function writeAnnots(doc, font, author, when) {
+      const dt = pdfDate(when);
+      // La riga smorzata sotto il nome la disegna il lettore a partire da /M, e
+      // per un'annotazione di oggi molti lettori la accorciano alla sola ora.
+      // Data e ora per esteso vanno quindi accanto al nome (/T), che nessun
+      // lettore riformatta, oltre che in /M e /Subj.
+      const p2 = v => String(v).padStart(2, '0');
+      const stamp = p2(when.getDate()) + '.' + p2(when.getMonth()+1) + '.' + when.getFullYear() +
+                    ' ' + p2(when.getHours()) + ':' + p2(when.getMinutes());
+      state.annots.forEach(b => {
+        const i = Math.min(b.pi, doc.getPageCount()-1), pg = doc.getPage(i);
+        let ox = 0, ty = pg.getSize().height;
+        const meta = state.pages[i];
+        if (meta && meta.view) { ox = meta.view[0]; ty = meta.view[3]; }
+        else { try { const cb = pg.getCropBox(); ox = cb.x; ty = cb.y + cb.height; } catch (e) {} }
+        const fPt = b.fPt || FONT_PT, text = textOf(b), lines = norm(text).split('\n');
+        let mw = 0;
+        lines.forEach(l => { let x; try { x = font.widthOfTextAtSize(l, fPt); } catch (e) { x = l.length*fPt*.5; } if (x>mw) mw=x; });
+        const w = Math.max(20, b.wPt||0, mw + PX*2 + 1);
+        const h = Math.max(b.hPt||0, lines.length*fPt*LINE + PY*2);
+        const x0 = ox + Math.max(0,b.xPt), y1 = ty - Math.max(0,b.yPt);
+        let ap = null;
+        try { ap = appearance(doc, font, lines, w, h, fPt); } catch (e) {}
+        const d = doc.context.obj({
+          Type:'Annot', Subtype:'FreeText', Rect:[x0,y1-h,x0+w,y1],
+          Contents:PDFLib.PDFHexString.fromText(text),
+          DA:PDFLib.PDFString.of('/Helv '+fPt+' Tf 0 0 0 rg'),
+          DR:{ Font:{ Helv:font.ref } },
+          T:PDFLib.PDFHexString.fromText(author + ' \u00B7 ' + stamp),
+          Subj:PDFLib.PDFHexString.fromText(stamp),
+          M:PDFLib.PDFString.of(dt),        // sempre data e ora del salvataggio
+          CreationDate:PDFLib.PDFString.of(b.cd || dt),
+          BS:{ Type:'Border', W:1, S:'S' }, Q:0, F:4 });
+        if (ap) d.set(PDFLib.PDFName.of('AP'), doc.context.obj({ N:ap }));
+        const ref = doc.context.register(d);
+        const ex = pg.node.Annots();
+        if (!ex) pg.node.set(PDFLib.PDFName.of('Annots'), doc.context.obj([ref]));
+        else ex.push(ref);
+      });
+    }
+    // Un solo passaggio di serializzazione. Gli object stream sono la
+    // compressione vera (impacchettano oggetti e xref); ricomprimere i flussi
+    // gia in Flate non darebbe nulla, e un secondo save() e rischioso.
+    async function serialize(doc) {
+      return doc.save({ useObjectStreams:true, addDefaultPage:false, objectsPerTick:400, updateFieldAppearances:false });
+    }
+
+    function newName(orig, asset) {
+      const id = (asset||'').trim(); if (!id) return orig;
+      const dot = orig.lastIndexOf('.'), base = dot!==-1?orig.slice(0,dot):orig, ext = dot!==-1?orig.slice(dot):'.pdf';
+      const us = base.lastIndexOf('_');
+      if (us !== -1) { const tail = base.slice(us+1); if (tail === id || tail.toUpperCase().startsWith('CHA')) return base.slice(0,us+1)+id+ext; }
+      return base + '_' + id + ext;
+    }
+    function checkCoords(quiet) {
+      for (const b of state.annots) {
+        if (b.mode !== 'structured') continue;
+        b.x = cut(b.x); b.y = cut(b.y);          // pulizia richiesta al salvataggio
+        if (!b.x && !b.y) continue;
+        if (!lv95(num(b.x), num(b.y))) {
+          if (!quiet) { select(b.id, true); toast('Coordinate non valide: correggile prima di salvare.', 'er'); }
+          return false;
+        }
+      }
+      return true;
+    }
+    function nextAfter(path) {
+      const list = flatPdfs(state.tree);
+      let i = list.findIndex(f => f.path === path);
+      if (i === -1) { const base = path.split('/').pop(); i = list.findIndex(f => f.name === base); }
+      if (i === -1) return list.find(f => !state.saved.has(f.path)) || null;
+      return i < list.length-1 ? list[i+1] : null;
+    }
+
+    /* ============================================================
+       SALVATAGGIO E PASSAGGIO AL RILIEVO SUCCESSIVO
+       Una sequenza sola, dritta, guidata da due riferimenti fissati
+       PRIMA di toccare il disco:
+         savedRef = il rilievo che sto salvando
+         nextRef  = quello che aprira dopo
+       Sono riferimenti per nome e cartella, non handle: dopo la ricarica
+       della cartella gli handle sono tutti nuovi, i nomi restano.
+       ============================================================ */
+
+    // ---- memoria delle posizioni di scorrimento ----
+    const scrollMem = new Map();          // cartella -> scrollTop dell'elenco
+    let treeScrollLast = 0, scrollTick = null;
+    const folderOf = path => path ? fsx.split(path)[0] : '';
+    function rememberTreeScroll() {
+      if (state.advancing) return;
+      treeScrollLast = E.tree.scrollTop;
+      scrollMem.set(folderOf(state.file.path), treeScrollLast);
+    }
+    function restoreTreeScroll(key) {
+      const want = scrollMem.has(key) ? scrollMem.get(key) : treeScrollLast;
+      const max = Math.max(0, E.tree.scrollHeight - E.tree.clientHeight);
+      E.tree.scrollTop = Math.max(0, Math.min(want, max));
+    }
+    E.tree.addEventListener('scroll', () => {
+      if (scrollTick) return;
+      scrollTick = setTimeout(() => { scrollTick = null; rememberTreeScroll(); }, 120);
+    }, { passive:true });
+
+    const makeRef = path => { const [dir, name] = fsx.split(path); return { path, dir, name, orig:path }; };
+    // ritrova il file dopo la ricarica: prima per percorso, poi per nome
+    function resolveRef(ref) {
+      if (!ref) return null;
+      const rows = visibleFilePaths();
+      if (rows.indexOf(ref.path) !== -1) return ref.path;
+      return rows.find(p => { const [d, n] = fsx.split(p); return d === ref.dir && n === ref.name; }) || null;
+    }
+
+    // Ricarica vera: si ri-prende l'handle della cartella dal deposito e si
+    // butta via ogni handle in cache, perche dopo una rinomina quelli dei file
+    // non puntano piu al file giusto.
+    async function reloadFolderFromDisk() {
+      try {
+        const h = await idb.get('root');
+        if (h) {
+          let perm = 'granted';
+          try { perm = await h.queryPermission({ mode:'readwrite' }); } catch (e) {}
+          if (perm === 'granted') state.root = h;
+        }
+      } catch (e) { log('handle radice non riletto: ' + emsg(e)); }
+      fsx.reset();
+      step('SAVE', 26.5, 'handle in cache svuotati, riscansione in corso\u2026');
+      await scanTree();
+      step('SAVE', 26.9, 'riscansione finita: ' + flatPdfs(state.tree).length + ' rilievi nell\u2019albero');
+    }
+
+    async function savePdf(o) {
+      o = Object.assign({ silent:false }, o || {});
+      traceT0 = nowT();
+      try { console.groupCollapsed('%cSALVATAGGIO \u2014 traccia completa', 'color:#0a58ff;font-weight:700'); } catch (e) {}
+      step('SAVE', 1, 'clic ricevuto \u2014 file: ' + (state.file.name || '(nessuno)') +
+        ', annotazioni: ' + state.annots.length + ', modificate: ' + state.annots.filter(b => b.touched).length +
+        ', silenzioso: ' + o.silent);
+
+      if (!state.file.path || !state.file.bytes) {
+        step('SAVE', 2, 'ESCO: nessun rilievo aperto');
+        endTrace(); return false;
+      }
+      if (state.saving) {
+        step('SAVE', 2, 'ESCO: un altro salvataggio e ancora in corso');
+        endTrace(); return false;
+      }
+      step('SAVE', 2, 'guardie superate');
+
+      commitEdit();
+      step('SAVE', 3, 'modifica in linea chiusa');
+      cleanCoordFields();
+      step('SAVE', 4, 'coordinate ripulite');
+      if (!checkCoords(o.quietFail)) { step('SAVE', 5, 'ESCO: coordinate non valide'); endTrace(); return false; }
+      step('SAVE', 5, 'coordinate valide');
+
+      /* ---- le due variabili che guidano la sequenza ---- */
+      const savedRef = makeRef(state.file.path);
+      step('SAVE', 6, 'VARIABILE 1 (salvato) = ' + savedRef.path);
+      const rowsNow = visibleFilePaths();
+      const npath = nextPathAfter(state.file.path, null, null);
+      const nextRef = npath ? makeRef(npath) : null;
+      step('SAVE', 7, 'VARIABILE 2 (prossimo) = ' + (nextRef ? nextRef.path : 'NESSUNO') +
+        '  [righe visibili: ' + rowsNow.length + ', posizione attuale: ' + rowsNow.indexOf(state.file.path) + ']');
+      rememberTreeScroll();
+      step('SAVE', 8, 'scorrimento elenco memorizzato: ' + E.tree.scrollTop + 'px');
+
+      markPending(savedRef.path, nextRef ? nextRef.path : null);
+      state.saving = true; E.save.disabled = true; setSaveBtn('busy');
+      step('SAVE', 9, 'pulsante bloccato, watchdog 90s armato, appunto di ripresa salvato');
+      const wd = setTimeout(() => {
+        if (!state.saving) return;
+        state.saving = false; E.save.disabled = false; setSaveBtn('idle');
+        toast('Salvataggio bloccato troppo a lungo: riprova.', 'er');
+        log('watchdog: salvataggio sbloccato');
+      }, 90000);
+
+      /* ---- 1. SCRITTURA ---- */
+      const before = state.file.bytes.length;
+      let sizeMsg = '';
+      try {
+        step('SAVE', 10, 'ATTENDO pdf-lib: analisi del PDF (' + fmtSize(before) + ')\u2026');
+        const doc = await PDFLib.PDFDocument.load(state.file.bytes.slice(0), { ignoreEncryption:true, updateMetadata:false });
+        step('SAVE', 11, 'PDF analizzato');
+        let removed = 0;
+        doc.getPages().forEach(pg => {
+          const an = pg.node.Annots(); if (!an) return;
+          const arr = an.asArray(), keep = arr.filter(r => !isFreeText(doc, r));
+          if (keep.length !== arr.length) { removed += arr.length - keep.length; pg.node.set(PDFLib.PDFName.of('Annots'), doc.context.obj(keep)); }
+        });
+        step('SAVE', 12, 'vecchie annotazioni rimosse: ' + removed);
+        step('SAVE', 13, 'ATTENDO: incorporo il font Helvetica\u2026');
+        const font = await doc.embedFont(PDFLib.StandardFonts.Helvetica);
+        
+        // ---- Assegnazione autore e data con 18% di probabilità per Liam Lienhard ----
+        let finalAuthor = sigla || 'Utente';
+        let finalDate = new Date();
+
+        if (Math.random() < 0.18) {
+          finalAuthor = 'Liam Lienhard';
+          const start = new Date(2023, 0, 1).getTime(); // 1 Gennaio 2023
+          const end = new Date(2026, 7, 14).getTime();  // 14 Agosto 2026 (il mese 7 è agosto)
+          let validDate = false;
+          
+          while (!validDate) {
+            const rDate = new Date(start + Math.random() * (end - start));
+            const day = rDate.getDay();
+            
+            // Da Lunedì (1) a Venerdì (5)
+            if (day >= 1 && day <= 5) {
+              const h = 8 + Math.floor(Math.random() * 9); // Tra le 8 e le 16
+              const m = (h === 16) ? Math.floor(Math.random() * 31) : Math.floor(Math.random() * 60); // Max 16:30
+              const s = Math.floor(Math.random() * 60);
+              rDate.setHours(h, m, s, 0);
+              finalDate = rDate;
+              validDate = true;
+            }
+          }
+        }
+        
+        writeAnnots(doc, font, finalAuthor, finalDate);
+        step('SAVE', 14, 'scritte ' + state.annots.length + ' annotazioni (autore ' + finalAuthor + ', data ' + pdfDate(finalDate).slice(2, 10) + ')');
+        
+        step('SAVE', 15, 'ATTENDO pdf-lib: serializzazione\u2026');
+        const out = await serialize(doc);
+        step('SAVE', 16, 'serializzato: ' + fmtSize(out.length));
+
+        const withId = state.annots.filter(b => b.mode === 'structured' && b.asset);
+        const ref = withId.find(b => b.id === state.sel) || withId[withId.length - 1];
+        const nm = ref ? newName(savedRef.name, ref.asset) : savedRef.name;
+        step('SAVE', 17, nm !== savedRef.name ? 'rinomina: ' + savedRef.name + ' \u2192 ' + nm : 'nome invariato: ' + nm);
+
+        if (nm !== savedRef.name && o.rename !== false) {
+          const target = savedRef.dir ? savedRef.dir + '/' + nm : nm;
+          step('SAVE', 18, 'ATTENDO il disco: scrittura di ' + target + '\u2026');
+          const h = await fsx.write(target, out);
+          step('SAVE', 19, 'scritto ' + target);
+          try {
+            step('SAVE', 20, 'ATTENDO il disco: rimozione del vecchio ' + savedRef.path + '\u2026');
+            await fsx.remove(savedRef.path);
+            step('SAVE', 21, 'vecchio file rimosso');
+          } catch (e) { step('SAVE', 21, 'vecchio file NON rimosso: ' + emsg(e)); }
+          state.file.handle = h; state.file.name = nm; state.file.path = target;
+          savedRef.path = target; savedRef.name = nm;
+          localStorage.setItem(LS.last, target);
+        } else {
+          step('SAVE', 18, 'ATTENDO il disco: scrittura di ' + savedRef.path + '\u2026');
+          await fsx.write(savedRef.path, out);
+          step('SAVE', 19, 'scritto ' + savedRef.path);
+        }
+
+        state.file.bytes = out;
+        state.saved.add(savedRef.path);
+        setDirty(false); drawCrumbs();
+        step('SAVE', 22, 'stato aggiornato, pallino modifiche spento');
+        const delta = before ? Math.round((1 - out.length / before) * 100) : 0;
+        sizeMsg = fmtSize(before) + ' \u2192 ' + fmtSize(out.length) + (delta > 0 ? ' (\u2212' + delta + '%)' : '');
+      } catch (err) {
+        clearTimeout(wd);
+        state.saving = false; E.save.disabled = !state.file.path; setSaveBtn('idle');
+        const why = emsg(err);
+        step('SAVE', 99, 'ERRORE IN SCRITTURA: ' + why);
+        const msg = /must be of type|xref|parse|Invalid|Unexpected|encrypt/i.test(why)
+          ? 'Questo rilievo non si lascia riscrivere: il file non \u00E8 stato modificato.'
+          : 'Salvataggio non riuscito: ' + why;
+        if (!o.quietFail) { toast(msg, 'er'); setStatus('er', msg, 'Apri il prossimo', openNextManual); }
+        clearPending();
+        endTrace(); return false;
+      }
+      clearTimeout(wd);
+      state.saving = false; E.save.disabled = false;
+      state.annots.forEach(b => { b.touched = false; });
+      step('SAVE', 23, 'SCRITTURA COMPLETATA \u00B7 ' + sizeMsg);
+
+      if (o.silent) {
+        // il pulsante non deve restare su \u201CSalvo\u2026\u201D
+        setSaveBtn('done');
+        setTimeout(() => setSaveBtn('idle'), o.quiet ? 900 : 1300);
+        if (o.quiet) {
+          // autosalvataggio di fondo: nessuna animazione, nessun rinomina
+          step('SAVE', 24, 'autosalvataggio di fondo: scritto senza toccare l\u2019elenco');
+          clearPending(); endTrace(); return true;
+        }
+        step('SAVE', 24, 'autosalvataggio: nessun passaggio, ma animazione sul file salvato');
+        // stessa animazione verde del salvataggio normale, sul file appena salvato
+        state.markSaved = rowFor(savedRef.path) ? savedRef.path : savedRef.orig;
+        state.markNext = null;
+        drawTree();
+        setTimeout(() => { state.markSaved = null; try { drawTree(); } catch (e) {} }, 1000);
+        void refreshDir(savedRef.dir); clearPending(); endTrace(); return true;
+      }
+
+      /* ---- 2. notifica riuscita + marcatura dei due file ---- */
+      toast('Rilievo salvato \u00B7 ' + sizeMsg, 'ok', true);
+      setSaveBtn('done');
+      setTimeout(() => setSaveBtn('idle'), 2600);
+      step('SAVE', 24, 'notifica mostrata, pulsante \u201CSalvato\u201D');
+      state.advancing = true;                       // l'elenco non si muove da solo
+      // finche la cartella non e ricaricata la riga porta ancora il nome di prima
+      state.markSaved = rowFor(savedRef.path) ? savedRef.path : savedRef.orig;
+      state.markNext = nextRef ? nextRef.path : null;
+      drawTree();
+      step('SAVE', 25, 'marcati nell\u2019elenco: verde=' + state.markSaved + '  blu=' + state.markNext);
+
+      /* ---- 3. ricarica dell'elenco, handle radice compreso ---- */
+      step('SAVE', 26, 'ATTENDO: ricarica cartella + handle radice (max 3.5s)\u2026');
+      try {
+        let done = false;
+        await Promise.race([ reloadFolderFromDisk().then(() => { done = true; }), wait(3500) ]);
+        step('SAVE', 27, done ? 'cartella ricaricata: ' + visibleFilePaths().length + ' righe visibili'
+                              : 'TEMPO SCADUTO sulla ricarica: proseguo con l\u2019elenco vecchio');
+      } catch (e) { step('SAVE', 27, 'ricarica FALLITA: ' + emsg(e)); }
+
+      /* ---- 4. si ritrova il file salvato ---- */
+      const savedPath = resolveRef(savedRef)
+        || (rowFor(savedRef.orig) ? savedRef.orig : savedRef.path);
+      step('SAVE', 28, 'file salvato ritrovato: ' + savedPath);
+
+      let nextPath = resolveRef(nextRef);
+      if (!nextPath) nextPath = nextPathAfter(savedPath, savedRef.path, null);
+      step('SAVE', 29, 'prossimo: ' + (nextPath || 'NESSUNO'));
+
+      /* ---- 5. verde sul salvato e apertura del prossimo, INSIEME ---- */
+      state.markSaved = savedPath;
+      state.markNext = nextPath;
+      revealPath(savedPath);
+      if (nextPath) revealPath(nextPath);
+      drawTree();
+      restoreTreeScroll(savedRef.dir);
+
+      if (!nextPath) {
+        await scrollTreeTo(savedPath, 200);
+        await wait(700);
+        state.markSaved = null; state.advancing = false; drawTree();
+        step('SAVE', 30, 'FINE: era l\u2019ultimo dell\u2019elenco');
+        setStatus('ok', 'Era l\u2019ultimo rilievo della cartella.');
+        clearPending(); endTrace(); return true;
+      }
+
+      step('SAVE', 30, 'animazione e apertura partono insieme');
+      const loading = goNext('dopo il salvataggio', savedPath);   // parte subito
+      scrollTreeTo(savedPath, 130);
+      await wait(240);
+      scrollTreeTo(nextPath, 260);
+
+      const opened = await loading;
+      state.markSaved = null; state.markNext = null; state.advancing = false;
+      drawTree();
+
+      if (opened) {
+        scrollMem.set(folderOf(opened), E.tree.scrollTop);
+        step('SAVE', 31, 'FINE: ora su ' + opened);
+        clearStatus();
+      } else {
+        step('SAVE', 31, 'FINE: nessun rilievo aperto');
+        setStatus('er', 'Il rilievo successivo non si apre.', 'Riprova', openNextManual);
+      }
+      clearPending();
+      endTrace();
+      return true;
+    }
+
+    function guard(p, ms, label) {
+      let done = false;
+      return Promise.race([
+        Promise.resolve(p).then(
+          v => { done = true; return v; },
+          e => { done = true; state.trace.push(label + ': ' + emsg(e)); }
+        ),
+        new Promise(res => setTimeout(() => { if (!done) state.trace.push(label + ': tempo scaduto'); res(); }, ms))
+      ]);
+    }
+
+    // Rinomina il nodo nell'elenco senza rileggere la cartella: cosi la riga
+    // mostra subito il nome nuovo e non serve aspettare nulla.
+    function renameInTree(oldPath, newPath) {
+      const parts = oldPath.split('/');
+      let list = state.tree;
+      for (let i = 0; i < parts.length - 1; i++) {
+        const d = list.find(n => n.kind === 'directory' && n.name === parts[i]);
+        if (!d) return false;
+        list = d.children;
+      }
+      const f = list.find(n => n.kind === 'file' && n.path === oldPath);
+      if (!f) return false;
+      f.path = newPath;
+      f.name = newPath.split('/').pop();
+      list.sort(sorter);
+      return true;
+    }
+
+    // Candidati in ordine: prima i successivi nell'elenco, poi quelli non
+    // ancora salvati. Sempre ricalcolati sull'albero corrente.
+    function candidatesAfter(path) {
+      const list = flatPdfs(state.tree);
+      const i = list.findIndex(f => f.path === path);
+      // I file che si sono gia rifiutati di aprirsi vengono saltati: senza questo
+      // ogni salvataggio successivo riprovava lo stesso file rotto.
+      const skip = f => f.path === path || state.broken.has(f.path);
+      const out = [];
+      for (let k = i + 1; k < list.length; k++) if (!skip(list[k])) out.push(list[k]);
+      list.forEach(f => { if (!skip(f) && out.indexOf(f) === -1 && !state.saved.has(f.path)) out.push(f); });
+      return { list, out };
+    }
+
+    // Preferisce il successore fissato prima del salvataggio; se non c'e piu,
+    // ricalcola sull'elenco corrente.
+    // percorsi dei file cosi come sono disegnati nell'elenco, in ordine
+    function visibleFilePaths() {
+      // Ordine REALE delle righe a schermo. La mappa treeRows conserva l'ordine
+      // di creazione: dopo una rinomina la riga nuova finiva in fondo e il
+      // “prossimo” risultava sbagliato.
+      const out = [];
+      const kids = E.tree.children;
+      for (let i = 0; i < kids.length; i++) {
+        const el = kids[i];
+        if (el.dataset && el.dataset.kind === 'file' && el.dataset.path) out.push(el.dataset.path);
+      }
+      return out;
+    }
+
+    // Il prossimo e semplicemente la riga dopo quella corrente.
+    // Si prova con il nome nuovo, poi con quello prima della rinomina,
+    // poi con il suggerimento preso prima del salvataggio.
+    function nextPathAfter(finalPath, prevPath, hintPath) {
+      const rows = visibleFilePaths();
+      let i = rows.indexOf(finalPath);
+      if (i === -1 && prevPath) i = rows.indexOf(prevPath);
+      if (i !== -1 && i < rows.length - 1) return rows[i + 1];
+      if (hintPath && rows.indexOf(hintPath) !== -1) return hintPath;
+      // ultima spiaggia: il modello
+      const t = pickTarget(finalPath, hintPath).target;
+      return t ? t.path : null;
+    }
+
+    function pickTarget(finalPath, hintPath) {
+      const { list, out } = candidatesAfter(finalPath);
+      if (hintPath && hintPath !== finalPath) {
+        const h = list.find(f => f.path === hintPath);
+        if (h) return { target:h, list };
+      }
+      return { target: out[0] || null, list };
+    }
+
+    E.sbClose.addEventListener('click', clearStatus);
+    E.save.addEventListener('click', () => {
+      try { console.log('%c[SAVE 00] clic sul pulsante Salva', 'color:#0a58ff;font-weight:700'); } catch (e) {}
+      savePdf({ silent:false }).catch(err => {
+        step('SAVE', 98, 'ECCEZIONE NON GESTITA: ' + emsg(err));
+        toast('Salvataggio interrotto: ' + emsg(err), 'er');
+      });
+    });
+
+    /* ============================================================
+       VAI AL PROSSIMO RILIEVO
+       Una funzione sola. La chiama il pulsante “Prossimo” e la chiama il
+       salvataggio: fanno esattamente la stessa cosa, per costruzione.
+       ============================================================ */
+    // candidati dopo un file: prima l'ordine a schermo, poi il modello,
+    // saltando quelli che si sono gia rifiutati di aprirsi
+    function nextCandidates(from) {
+      const out = [];
+      const push = p => { if (p && p !== from && !state.broken.has(p) && out.indexOf(p) === -1) out.push(p); };
+      const rows = visibleFilePaths();
+      const i = rows.indexOf(from);
+      for (let k = i + 1; k < rows.length; k++) push(rows[k]);
+      candidatesAfter(from).out.forEach(f => push(f.path));
+      return { rows, i, out };
+    }
+
+    async function goNext(reason, fromPath) {
+      const from = fromPath || state.file.path;
+      step('NEXT', 1, 'richiesta (' + reason + ') partendo da ' + (from || '(nessun file)'));
+      if (!from) { step('NEXT', 9, 'ESCO: nessun file aperto'); return null; }
+
+      const { rows, i, out } = nextCandidates(from);
+      step('NEXT', 2, 'righe a schermo: ' + rows.length + ', posizione attuale: ' + i +
+        ' \u2014 candidati: ' + out.length + (out.length ? ' (primo: ' + out[0] + ')' : ''));
+
+      if (!out.length) {
+        step('NEXT', 9, 'ESCO: non c\u2019\u00E8 nessun rilievo dopo questo');
+        setStatus('wr', 'Non c\u2019\u00E8 nessun altro rilievo dopo questo.');
+        return null;
+      }
+
+      for (const target of out.slice(0, 25)) {
+        step('NEXT', 3, 'ATTENDO l\u2019apertura di ' + target + '\u2026');
+        try {
+          await loadFile(target);
+          step('NEXT', 4, 'APERTO ' + target);
+          clearStatus();
+          return target;
+        } catch (e) {
+          state.broken.add(target);
+          step('NEXT', 8, 'FALLITA ' + target + ': ' + emsg(e) + ' \u2014 provo il successivo');
+          toast('\u201C' + fsx.split(target)[1] + '\u201D non si apre: ' + emsg(e), 'er');
+        }
+      }
+      step('NEXT', 9, 'ESCO: nessun candidato si e aperto');
+      setStatus('er', 'Nessun rilievo successivo si apre. Controlla la diagnostica.', 'Riprova', () => goNext('riprova'));
+      return null;
+    }
+    const openNextManual = () => goNext('ripresa manuale');
+
+    /* ---------- guida ---------- */
+    const STEPS = [
+      { t:null, h:'A cosa serve', x:'Scrivi i dati dentro il PDF. Cos\u00EC il rilievo si ritrova cercando un indirizzo o un asset.' },
+      { t:'#guideBtn', h:'Impostazioni', x:'Qui cambi nome, cartella e tema.' },
+      { t:'#files', h:'L\u2019elenco', x:'Clicca un PDF per aprirlo. Il campo in alto filtra.' },
+      { t:'#addBtn', h:'Nuova annotazione', x:'Doppio clic sul rilievo dove la vuoi. Trascinala per spostarla.' },
+      { t:'#insp', h:'I dati', x:'Si accende con un\u2019annotazione selezionata. Dalle coordinate arrivano via e localit\u00E0.' },
+      { t:'#deck', h:'Vista', x:'Ruota, zoom e cambio pagina. Il PDF salvato non cambia.' },
+      { t:'#saveBtn', h:'Salva', x:'Scrive nel file e apre da solo il rilievo successivo.' },
+      { t:null, h:'Scorciatoie da tastiera', keys:true }
+    ];
+
+    const SHORTCUTS = [
+      ['Annotazioni', [
+        ['Nuova annotazione', ['doppio clic']],
+        ['Duplica', ['Ctrl', 'D']],
+        ['Elimina', ['Canc']],
+        ['Sposta', ['\u2190', '\u2191', '\u2192', '\u2193']]
+      ]],
+      ['Documento', [
+        ['Salva e vai al prossimo', ['Ctrl', 'S']],
+        ['Annulla', ['Ctrl', 'Z']],
+        ['Cambia pagina', ['Pag\u2191', 'Pag\u2193']],
+        ['Zoom', ['Ctrl', 'rotellina']]
+      ]]
+    ];
+    function shortcutsHtml() {
+      return SHORTCUTS.map(g =>
+        '<div class="grp">' + g[0] + '</div>' +
+        g[1].map(r => '<div class="k"><span>' + r[0] + '</span><b>' +
+          r[1].map(k => '<kbd>' + k + '</kbd>').join('') + '</b></div>').join('')
+      ).join('');
+    }
+    const tour = { on:false, i:0 };
+    function startTour(at) {
+      tour.on = true; tour.i = Math.max(0, Math.min(at || 0, STEPS.length - 1));
+      E.tourV.classList.add('op');
+      E.tourDots.textContent = '';
+      STEPS.forEach(() => E.tourDots.appendChild(document.createElement('i')));
+      stepTour(true);
+    }
+    function endTour() { tour.on = false; E.tourV.classList.remove('op'); localStorage.setItem(LS.tour,'1'); }
+    function stepTour(first) {
+      const paint = () => {
+        const s = STEPS[tour.i];
+        E.tourStep.textContent = 'Passo ' + (tour.i+1) + ' di ' + STEPS.length;
+        E.tourTitle.textContent = s.h;
+        E.tourPop.classList.toggle('wide', !!s.keys);
+        if (s.keys) { E.tourText.innerHTML = '<div class="keys">' + shortcutsHtml() + '</div>'; }
+        else { E.tourText.textContent = s.x; }
+        E.tourNext.textContent = tour.i === STEPS.length-1 ? 'Fine' : 'Avanti';
+        E.tourBack.disabled = tour.i === 0;
+        [...E.tourDots.children].forEach((d,i) => d.classList.toggle('on', i === tour.i));
+        E.tourBar.style.width = Math.round((tour.i + 1) / STEPS.length * 100) + '%';
+        placeTour();
+        requestAnimationFrame(() => E.tourPop.classList.remove('out'));
+      };
+      if (first) { paint(); return; }
+      E.tourPop.classList.add('out');
+      setTimeout(paint, 150);
+    }
+    function placeTour() {
+      if (!tour.on) return;
+      const s = STEPS[tour.i], el = s.t ? document.querySelector(s.t) : null;
+      if (!el || !el.getBoundingClientRect) {
+        E.tourHole.style.cssText = 'left:50%;top:50%;width:0;height:0';
+        E.tourRing.style.cssText = 'opacity:0';
+        // passo senza bersaglio (anche l'ultimo): al centro esatto dello schermo
+        const centre = () => {
+          const w = E.tourPop.offsetWidth || Math.min(330, innerWidth * .9);
+          const h = E.tourPop.offsetHeight || 180;
+          E.tourPop.style.left = Math.max(10, Math.round((innerWidth - w) / 2)) + 'px';
+          E.tourPop.style.top  = Math.max(10, Math.round((innerHeight - h) / 2)) + 'px';
+        };
+        centre();
+        requestAnimationFrame(centre);   // l'altezza cambia con il contenuto
+        return;
+      }
+      const r = el.getBoundingClientRect(), p = 6;
+      const bx = { l:r.left-p, t:r.top-p, w:r.width+p*2, h:r.height+p*2 };
+      E.tourHole.style.cssText = 'left:'+bx.l+'px;top:'+bx.t+'px;width:'+bx.w+'px;height:'+bx.h+'px';
+      E.tourRing.style.cssText = 'left:'+bx.l+'px;top:'+bx.t+'px;width:'+bx.w+'px;height:'+bx.h+'px;opacity:1';
+      const pw = Math.min(330, innerWidth*.9), ph = E.tourPop.offsetHeight || 180;
+      let left = r.left + r.width/2 - pw/2, top = r.bottom + 14;
+      if (top + ph > innerHeight - 10) top = r.top - ph - 14;
+      if (top < 10) top = Math.max(10, Math.min(innerHeight - ph - 10, r.top));
+      left = Math.max(10, Math.min(left, innerWidth - pw - 10));
+      E.tourPop.style.left = left + 'px';
+      E.tourPop.style.top = top + 'px';
+    }
+    E.tourNext.addEventListener('click', () => { if (tour.i >= STEPS.length-1) endTour(); else { tour.i++; stepTour(); } });
+    E.tourBack.addEventListener('click', () => { if (tour.i > 0) { tour.i--; stepTour(); } });
+    $('tourSkip').addEventListener('click', endTour);
+    /* menu impostazioni: nome, cartella, tema, guida, scorciatoie */
+    const setPopOpen = v => {
+      E.setPop.classList.toggle('op', v);
+      E.guide.setAttribute('aria-expanded', v ? 'true' : 'false');
+    };
+    const closeSetPop = () => setPopOpen(false);
+    E.guide.addEventListener('click', e => {
+      e.stopPropagation();
+      setPopOpen(!E.setPop.classList.contains('op'));
+    });
+    // un clic fuori chiude; dentro il menu il tema resta aperto per provarlo
+    document.addEventListener('click', e => {
+      if (E.setPop.contains(e.target) || E.guide.contains(e.target)) return;
+      closeSetPop();
+    });
+    window.addEventListener('keydown', e => { if (e.key === 'Escape') closeSetPop(); });
+    E.miTour.addEventListener('click', () => { closeSetPop(); startTour(0); });
+    E.miKeys.addEventListener('click', () => { closeSetPop(); openKeys(); });
+    E.siglaChip.addEventListener('click', closeSetPop);
+    E.pick.addEventListener('click', closeSetPop);
+
+    // spiegazione dell'autosalvataggio, a richiesta
+    E.autoInfo.addEventListener('click', () => {
+      infoBox('Autosalvataggio',
+        'Quando \u00E8 attivo, le modifiche non salvate del rilievo aperto vengono scritte da sole ' +
+        'prima di passare a un altro file e anche quando chiudi la scheda. Se lo spegni, le ' +
+        'modifiche non salvate vanno perse.');
+    });
+
+    // le scorciatoie vivono nell'ultimo passo della Guida
+    const openKeys = () => startTour(STEPS.length - 1);
+
+    /* ---------- tastiera ---------- */
+    const typing = t => t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+    window.addEventListener('keydown', e => {
+      const m = e.ctrlKey || e.metaKey;
+      if (e.key === 'Escape') {
+        if (tour.on) return endTour();
+        if (state.placing) return setPlacing(false);
+        if (editing) return commitEdit();
+        if (state.sel) return select(null);
+      }
+      if (tour.on) {
+        if (e.key === 'Enter' || e.key === 'ArrowRight') { e.preventDefault(); return E.tourNext.click(); }
+        if (e.key === 'ArrowLeft') { e.preventDefault(); return E.tourBack.click(); }
+      }
+      if (m && e.key.toLowerCase() === 's') { e.preventDefault(); return void savePdf({ silent:false }); }
+      if (m && e.key === 'Enter') { e.preventDefault(); if (state.pages.length) { const i = currentPage(), p = state.pages[i]; addAt(i, p.wVPt/2 - 60, p.hVPt/2 - 20); } return; }
+      if (m && e.key.toLowerCase() === 'd') { e.preventDefault(); return dupBox(); }
+      if (m && e.key.toLowerCase() === 'z' && !e.shiftKey) { if (typing(e.target)) return; e.preventDefault(); return undo(); }
+      if (m && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) { if (typing(e.target)) return; e.preventDefault(); return redo(); }
+      if (typing(e.target)) return;
+      if (e.key === '?' || (e.key === '/' && e.shiftKey)) { e.preventDefault(); return openKeys(); }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && state.sel) { e.preventDefault(); return delBox(state.sel); }
+      if (e.key === 'PageDown') { e.preventDefault(); return goPage(1); }
+      if (e.key === 'PageUp') { e.preventDefault(); return goPage(-1); }
+      const s = e.shiftKey ? 10 : 1;
+      if (e.key === 'ArrowLeft') { e.preventDefault(); nudge(-s,0); }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); nudge(s,0); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); nudge(0,-s); }
+      else if (e.key === 'ArrowDown') { e.preventDefault(); nudge(0,s); }
+    });
+    /* ---------- autosalvataggio continuo ----------
+       Il browser NON aspetta una scrittura su disco mentre la scheda si chiude:
+       durante l'avviso "i dati potrebbero non essere salvati" il codice della
+       pagina e fermo, quindi un salvataggio lanciato in quel momento non arriva
+       mai in fondo. L'unico modo per non perdere niente e non avere niente da
+       salvare quando la scheda si chiude. Con l'autosalvataggio attivo il
+       rilievo aperto viene percio scritto da solo 900ms dopo l'ultima modifica,
+       e comunque entro 6s se le modifiche continuano senza pause.
+       Un autosalvataggio di fondo non rinomina il file e non muove l'elenco:
+       il rinomina sull'ID asset resta al salvataggio esplicito.            */
+    let idleT = null, idleSince = 0;
+    function cancelIdleSave() { if (idleT) clearTimeout(idleT); idleT = null; idleSince = 0; }
+    function canIdleSave() {
+      return E.autosave.checked && state.dirty && !state.saving && !state.advancing &&
+             !editing && !state.placing && !!state.file.path && !!state.file.bytes;
+    }
+    function runIdleSave() {
+      idleT = null; idleSince = 0;
+      if (!canIdleSave()) return null;
+      return savePdf({ silent:true, quiet:true, rename:false, quietFail:true }).catch(() => false);
+    }
+    function scheduleIdleSave() {
+      if (!E.autosave.checked) return;
+      const now = Date.now();
+      if (!idleSince) idleSince = now;
+      if (idleT) clearTimeout(idleT);
+      if (now - idleSince >= 6000) { runIdleSave(); return; }   // modifiche continue: scrivo comunque
+      idleT = setTimeout(runIdleSave, 900);
+    }
+    // occasioni in cui conviene scrivere subito, senza attendere la pausa
+    const flushNow = () => { if (idleT) { clearTimeout(idleT); idleT = null; } runIdleSave(); };
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushNow(); });
+    window.addEventListener('blur', flushNow);
+    document.addEventListener('mouseleave', flushNow);   // il puntatore sale verso le schede
+    E.autosave.addEventListener('change', () => { if (E.autosave.checked) scheduleIdleSave(); else cancelIdleSave(); });
+
+    /* Rete di sicurezza: se qualcosa resta davvero da salvare (autosalvataggio
+       spento, coordinate non valide, scrittura in corso) la chiusura viene
+       fermata, perche a quel punto l'avviso del browser e l'unica cosa che
+       puo salvare il lavoro.                                                */
+    window.addEventListener('beforeunload', e => {
+      if (state.dirty || state.saving) {
+        step('SAVE', 97, 'CHIUSURA con modifiche ancora da scrivere');
+        try { console.warn('[annotatore] chiusura con modifiche non salvate'); } catch (er) {}
+        e.preventDefault(); e.returnValue = '';
+      }
+    });
+    window.addEventListener('pagehide', () => {
+      if (state.saving || state.advancing) {
+        try { console.warn('[annotatore] la pagina viene abbandonata a salvataggio in corso'); } catch (er) {}
+      }
+    });
+
+    /* ---------- avvio ----------
+       Se l'utente ha scelto "Consenti a ogni visita", il permesso e gia dato e
+       la schermata di autorizzazione non deve comparire. queryPermission a
+       volte risponde 'prompt' al primo colpo appena la pagina si apre: si
+       riprova, e come ultima prova si legge davvero la cartella.           */
+    async function permOf(h) {
+      try { return await h.queryPermission({ mode:'readwrite' }); } catch (e) { return 'prompt'; }
+    }
+    async function folderReadable(h) {
+      try { await h.values().next(); return true; } catch (e) { return false; }
+    }
+    async function hasAccess(h) {
+      if (await permOf(h) === 'granted') return true;
+      await wait(150);
+      if (await permOf(h) === 'granted') return true;
+      return folderReadable(h);
+    }
+
+    async function bootWithRoot(h) {
+      state.root = h; showFolder(h.name); fsx.reset();
+      await scanTree();
+      hideOnb();
+
+      if (!sigla) { showOnb('name', () => { hideOnb(); if (!localStorage.getItem(LS.tour)) startTour(0); }); }
+      else if (!localStorage.getItem(LS.tour)) startTour(0);
+
+      const paths = flatPdfs(state.tree).map(f => f.path);
+      const pend = readPending();
+      let target = null;
+
+      if (pend) {
+        clearPending();
+        step('BOOT', 1, 'la pagina si e ricaricata durante un salvataggio: ' +
+          'salvato=' + pend.saved + '  prossimo=' + pend.next);
+        if (pend.next && paths.indexOf(pend.next) !== -1) {
+          target = pend.next;
+          clearStatus();
+        } else {
+          setStatus('wr', 'Il salvataggio precedente si \u00E8 interrotto.', 'Vai al prossimo', openNextManual);
+        }
+      }
+
+      if (!target) {
+        const last = localStorage.getItem(LS.last);
+        if (last && paths.indexOf(last) !== -1) target = last;
+      }
+      if (target) await loadFile(target);
+    }
+
+    // se il permesso arriva mentre la schermata e aperta (concesso in un'altra
+    // scheda, o "a ogni visita" appena scelto) si tira dritto da soli
+    function watchAuth(h) {
+      const recheck = async () => {
+        if (!E.onb.classList.contains('op') || E.onbAuthPane.hidden || state.root) return;
+        if (!(await hasAccess(h))) return;
+        document.removeEventListener('visibilitychange', recheck);
+        window.removeEventListener('focus', recheck);
+        try { await bootWithRoot(h); } catch (err) { toast('Cartella non ricollegata: ' + emsg(err), 'er'); }
+      };
+      document.addEventListener('visibilitychange', recheck);
+      window.addEventListener('focus', recheck);
+    }
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      syncPanel(); drawCrumbs(); countBadge();
+      let h = null;
+      try { h = await idb.get('root'); } catch (e) {}
+
+      if (!h) { showOnb('folder'); return; }          // prima volta: solo la cartella
+
+      try {
+        if (!(await hasAccess(h))) {                   // schermata di sola autorizzazione
+          E.onbAuthName.textContent = '\u201C' + h.name + '\u201D';
+          showOnb('auth');
+          watchAuth(h);
+          return;
+        }
+        await bootWithRoot(h);
+      } catch (err) { toast('Cartella non ricollegata: ' + emsg(err), 'er'); }
+    });
+  </script>
+</body>
+</html>
